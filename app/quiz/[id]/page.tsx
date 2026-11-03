@@ -35,38 +35,49 @@ export default function QuizWithBackNavigation({ params }: { params: Promise<{ i
   const [loading, setLoading] = useState(true);
   const [quizCompleted, setQuizCompleted] = useState(false);
   const [userAnswers, setUserAnswers] = useState<AnswerRecord[]>([]);
+  const [moduleInfo, setModuleInfo] = useState<{ title: string; courseId: string } | null>(null);
+  const [attemptStats, setAttemptStats] = useState({ attempts: 0, best: 0 });
 
   useEffect(() => {
+    document.title = 'CampusNotes';
+    try {
+      const saved = JSON.parse(localStorage.getItem(`quiz_stats_${moduleId}`) || '{"attempts":0,"best":0}');
+      setAttemptStats({ attempts: Number(saved.attempts) || 0, best: Number(saved.best) || 0 });
+    } catch {
+      setAttemptStats({ attempts: 0, best: 0 });
+    }
     fetchQuizMCQs();
   }, [moduleId]);
 
   const fetchQuizMCQs = async () => {
     setLoading(true);
-    const { data: quizData } = await supabase
-      .from('quizzes')
-      .select('id, subject')
-      .eq('module_id', moduleId)
-      .single();
 
-    if (quizData) {
-      const { data: mcqData } = await supabase
-        .from('mcqs')
-        .select('*')
-        .eq('quiz_id', quizData.id);
+    const { data: moduleData } = await supabase
+      .from('modules')
+      .select('title, course_id')
+      .eq('id', moduleId)
+      .maybeSingle();
+    if (moduleData) setModuleInfo({ title: moduleData.title, courseId: moduleData.course_id });
 
-      if (mcqData && mcqData.length > 0) {
-        setMcqs(mcqData);
+    const response = await fetch('/api/quiz', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ moduleId }),
+    });
+
+    if (response.ok) {
+      const generated = await response.json();
+      if (Array.isArray(generated.questions) && generated.questions.length > 0) {
+        setMcqs(generated.questions.map((question: MCQ, index: number) => ({
+          ...question,
+          id: `${moduleId}-${index}`,
+        })));
       }
     }
     setLoading(false);
   };
 
-  const currentMcq = mcqs[currentIndex] || {
-    question: 'Which data structure follows the Last-In-First-Out (LIFO) order?',
-    options: ['Queue', 'Stack', 'Binary tree', 'Hash table'],
-    correct_option: 1,
-    explanation: 'A Stack utilizes Last-In-First-Out (LIFO) order where the last element inserted is removed first.'
-  };
+  const currentMcq = mcqs[currentIndex];
 
   const handleSelectOption = (index: number) => {
     if (selectedOption !== null) return;
@@ -93,6 +104,31 @@ export default function QuizWithBackNavigation({ params }: { params: Promise<{ i
       setCurrentIndex((prev) => prev + 1);
       setSelectedOption(null);
     } else {
+      const finalPercent = Math.round((score / mcqs.length) * 100);
+      try {
+        const key = `quiz_stats_${moduleId}`;
+        const previous = JSON.parse(localStorage.getItem(key) || '{"attempts":0,"best":0}');
+        const next = {
+          attempts: (previous.attempts || 0) + 1,
+          best: Math.max(previous.best || 0, finalPercent),
+        };
+        localStorage.setItem(key, JSON.stringify(next));
+        setAttemptStats(next);
+      } catch {
+        setAttemptStats({ attempts: 1, best: finalPercent });
+      }
+      if (moduleInfo?.courseId) {
+        const progressKey = `progress_${moduleInfo.courseId}`;
+        try {
+          const completed = JSON.parse(localStorage.getItem(progressKey) || '[]');
+          const completedIds = Array.isArray(completed) ? completed : [];
+          if (!completedIds.includes(moduleId)) {
+            localStorage.setItem(progressKey, JSON.stringify([...completedIds, moduleId]));
+          }
+        } catch {
+          localStorage.setItem(progressKey, JSON.stringify([moduleId]));
+        }
+      }
       setQuizCompleted(true);
     }
   };
@@ -110,13 +146,36 @@ export default function QuizWithBackNavigation({ params }: { params: Promise<{ i
     return <div className="p-16 text-center text-xs text-teal-600 font-semibold">Loading Quiz Engine...</div>;
   }
 
-  const totalQuestions = mcqs.length || 4;
+  if (mcqs.length === 0) {
+    return (
+      <div className="min-h-screen bg-white text-[#14b8a6] font-sans flex items-center justify-center p-6">
+        <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-10 text-center shadow-xl shadow-slate-200/60">
+          <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-teal-50 text-[#14b8a6]">
+            <BookOpen className="h-6 w-6" />
+          </div>
+          <p className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-[#14b8a6]">Practice quiz</p>
+          <h1 className="text-2xl font-black">Questions are not available yet</h1>
+          <p className="mt-3 text-sm leading-6 text-slate-500">
+            This module quiz has not been populated by an administrator. Return to the course notes and continue studying.
+          </p>
+          <Link
+            href={moduleInfo ? `/course/${moduleInfo.courseId}` : '/'}
+            className="mt-6 inline-flex items-center justify-center rounded-lg bg-[#14b8a6] px-5 py-3 text-xs font-bold text-white transition hover:bg-[#0d9488]"
+          >
+            Back to course
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const totalQuestions = mcqs.length;
   const incorrectCount = totalQuestions - score;
   const percentageScore = Math.round((score / totalQuestions) * 100);
   const progressPercentage = Math.round(((currentIndex + 1) / totalQuestions) * 100);
 
   return (
-    <div className="min-h-screen bg-white text-black font-sans flex flex-col justify-between">
+    <div className="min-h-screen bg-white text-[#14b8a6] font-sans flex flex-col justify-between">
       <div>
         {/* Header Navigation with Back & Forward Controls */}
         <header className="border-b-2 border-teal-500/20 px-6 py-3 flex items-center justify-between bg-white shadow-sm">
@@ -142,7 +201,10 @@ export default function QuizWithBackNavigation({ params }: { params: Promise<{ i
               <div className="w-9 h-9 rounded-xl bg-teal-500 text-white flex items-center justify-center font-bold text-sm shadow-md">
                 <BookOpen className="w-5 h-5" />
               </div>
-              <span className="font-extrabold text-xl text-teal-600 tracking-tight">CampusNotes</span>
+              <div>
+                <div className="text-lg font-black tracking-tight text-[#14b8a6]">CampusNotes</div>
+                <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#14b8a6]">Academic Library</div>
+              </div>
             </div>
           </div>
 
@@ -156,8 +218,8 @@ export default function QuizWithBackNavigation({ params }: { params: Promise<{ i
         {quizCompleted ? (
           /* QUIZ RESULTS VIEW */
           <main className="max-w-4xl mx-auto px-6 py-8">
-            <h1 className="text-xl font-black text-black mb-8 text-center sm:text-left">
-              Quiz results: Data Structures
+            <h1 className="text-xl font-black text-[#334155] mb-8 text-center sm:text-left">
+              Quiz results: {moduleInfo?.title ?? 'Module'}
             </h1>
 
             <div className="flex flex-col lg:flex-row items-center justify-between gap-8 mb-8">
@@ -171,7 +233,7 @@ export default function QuizWithBackNavigation({ params }: { params: Promise<{ i
               <div className="flex-1 w-full">
                 <div className="grid grid-cols-3 gap-4 mb-3">
                   <div className="border-2 border-teal-200 rounded-2xl p-4 text-center bg-teal-50/20">
-                    <span className="text-3xl font-black text-black block mb-1">{totalQuestions}</span>
+                    <span className="text-3xl font-black text-[#334155] block mb-1">{totalQuestions}</span>
                     <span className="text-[11px] font-semibold text-gray-600">Total questions</span>
                   </div>
 
@@ -187,13 +249,13 @@ export default function QuizWithBackNavigation({ params }: { params: Promise<{ i
                 </div>
 
                 <p className="text-[11px] text-gray-500 font-medium text-center">
-                  Attempts on this quiz: 3 &nbsp;|&nbsp; Best score: {Math.max(percentageScore, 85)}%
+                  Attempts on this quiz: {attemptStats.attempts} &nbsp;|&nbsp; Best score: {attemptStats.best}%
                 </p>
               </div>
             </div>
 
             <div className="mb-8">
-              <h2 className="text-sm font-extrabold text-black mb-3">Review your answers</h2>
+              <h2 className="text-sm font-extrabold text-[#334155] mb-3">Review your answers</h2>
 
               <div className="border-2 border-teal-500/20 rounded-xl overflow-hidden bg-white">
                 <table className="w-full text-left text-xs border-collapse">
@@ -206,16 +268,8 @@ export default function QuizWithBackNavigation({ params }: { params: Promise<{ i
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-teal-100">
-                    {(userAnswers.length > 0
-                      ? userAnswers
-                      : [
-                          { question: 'Q1 Which structure uses LIFO?', userAnswer: 'Stack', correctAnswer: 'Stack', isCorrect: true },
-                          { question: 'Q2 Time to access array element', userAnswer: 'O(n)', correctAnswer: 'O(1)', isCorrect: false },
-                          { question: 'Q3 Which is not linear?', userAnswer: 'Tree', correctAnswer: 'Tree', isCorrect: true },
-                          { question: 'Q4 Queue order', userAnswer: 'FIFO', correctAnswer: 'FIFO', isCorrect: true },
-                        ]
-                    ).map((row, idx) => (
-                      <tr key={idx} className="hover:bg-teal-50/30 text-gray-800">
+                    {userAnswers.map((row, idx) => (
+                      <tr key={idx} className="hover:bg-teal-50/30 text-[#334155]">
                         <td className="p-3 border-r border-teal-100 font-medium">{row.question}</td>
                         <td className="p-3 border-r border-teal-100">{row.userAnswer}</td>
                         <td className="p-3 border-r border-teal-100">{row.correctAnswer}</td>
@@ -241,7 +295,7 @@ export default function QuizWithBackNavigation({ params }: { params: Promise<{ i
                 Retake quiz
               </button>
               <Link
-                href={`/course/${moduleId}`}
+                href={moduleInfo ? `/course/${moduleInfo.courseId}` : '/'}
                 className="border-2 border-teal-500 text-teal-800 px-6 py-2.5 rounded-xl text-xs font-bold hover:bg-teal-50 transition inline-block"
               >
                 Back to course
@@ -252,9 +306,9 @@ export default function QuizWithBackNavigation({ params }: { params: Promise<{ i
           /* ACTIVE QUIZ VIEW */
           <main className="max-w-4xl mx-auto px-6 py-8">
             <div className="flex items-center justify-between mb-6">
-              <h1 className="text-xl font-extrabold text-black">Data Structures: Quiz</h1>
+              <h1 className="text-xl font-extrabold text-[#334155]">{moduleInfo?.title ?? 'Module'}: Quiz</h1>
               <Link
-                href={`/course/${moduleId}`}
+                href={moduleInfo ? `/course/${moduleInfo.courseId}` : '/'}
                 className="border-2 border-teal-500 text-teal-800 px-4 py-1.5 rounded-xl text-xs font-bold hover:bg-teal-50 transition"
               >
                 Quit quiz
@@ -278,7 +332,7 @@ export default function QuizWithBackNavigation({ params }: { params: Promise<{ i
               </span>
             </div>
 
-            <div className="border-2 border-teal-200 rounded-2xl p-6 bg-teal-50/30 text-sm font-extrabold text-black mb-6">
+            <div className="border-2 border-teal-200 rounded-2xl p-6 bg-teal-50/30 text-sm font-extrabold text-[#334155] mb-6">
               {currentMcq.question}
             </div>
 
@@ -288,7 +342,7 @@ export default function QuizWithBackNavigation({ params }: { params: Promise<{ i
                 const isSelected = selectedOption === idx;
                 const isCorrect = idx === currentMcq.correct_option;
 
-                let optionStyle = 'border-2 border-teal-200/80 bg-white hover:bg-teal-50/50 text-black';
+                let optionStyle = 'border-2 border-teal-200/80 bg-white hover:bg-teal-50/50 text-[#334155]';
                 let statusBadge = null;
 
                 if (selectedOption !== null) {
@@ -321,7 +375,7 @@ export default function QuizWithBackNavigation({ params }: { params: Promise<{ i
             </div>
 
             {selectedOption !== null && (
-              <div className="border-2 border-teal-300 rounded-2xl p-5 bg-teal-50/60 text-xs text-gray-800 leading-relaxed mb-6">
+              <div className="border-2 border-teal-300 rounded-2xl p-5 bg-teal-50/60 text-xs text-[#334155] leading-relaxed mb-6">
                 <h3 className="font-extrabold text-teal-900 mb-2 text-xs">Explanation</h3>
                 <p>{currentMcq.explanation}</p>
               </div>

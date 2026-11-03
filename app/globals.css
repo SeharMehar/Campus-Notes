@@ -2,7 +2,7 @@
 
 :root {
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #334155;
 }
 
 @theme inline {
@@ -12,53 +12,21 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: #ffffff;
+  color: #334155;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
-@import "tailwindcss";
+
+::selection {
+  background: #ccfbf1;
+  color: #115e59;
+}
 
 @layer utilities {
-  .bg-seagreen {
-    background-color: #14b8a6 !important;
-  }
-  .bg-seagreen-hover {
-    background-color: #0f766e !important;
-  }
-  .bg-seagreen-light {
-    background-color: #ccfbf1 !important;
-  }
-  .text-seagreen {
-    color: #14b8a6 !important;
-  }
-  .border-seagreen {
-    border-color: #14b8a6 !important;
-  }
-}
-@import "tailwindcss";
-
-@layer utilities {
-  .bg-seagreen {
-    background-color: #14b8a6 !important;
-  }
-  .bg-seagreen-hover {
-    background-color: #0f766e !important;
-  }
-  .bg-seagreen-light {
-    background-color: #ccfbf1 !important;
-  }
-  .text-seagreen {
-    color: #14b8a6 !important;
-  }
-  .border-seagreen {
-    border-color: #14b8a6 !important;
-  }
+  .bg-seagreen { background-color: #14b8a6 !important; }
+  .bg-seagreen-hover { background-color: #0f766e !important; }
+  .bg-seagreen-light { background-color: #ccfbf1 !important; }
+  .text-seagreen { color: #14b8a6 !important; }
+  .border-seagreen { border-color: #14b8a6 !important; }
 }

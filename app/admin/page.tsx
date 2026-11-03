@@ -20,6 +20,7 @@ interface Module {
   course_id: string;
   title: string;
   content?: string;
+  position?: number;
 }
 
 interface MCQ {
@@ -33,7 +34,7 @@ interface MCQ {
 
 export default function AdminDashboardPage() {
   const router = useRouter();
-  const [isAdmin, setIsAdmin] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [userEmail, setUserEmail] = useState('admin@ptut');
 
   // Sidebar Active Tab State: 'Dashboard' | 'Courses' | 'Modules' | 'MCQ Banks'
@@ -71,15 +72,34 @@ export default function AdminDashboardPage() {
   const [explanation, setExplanation] = useState('');
 
   const [loading, setLoading] = useState(false);
+  const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const showNotice = (text: string, type: 'success' | 'error' = 'success') => {
+    setNotice({ type, text });
+    window.setTimeout(() => setNotice(null), 3500);
+  };
 
   useEffect(() => {
+    document.title = 'CampusNotes';
     const savedUser = localStorage.getItem('user');
-    if (savedUser) {
-      const parsed = JSON.parse(savedUser);
-      setUserEmail(parsed.email || 'admin@ptut');
-      if (parsed.role !== 'ADMIN') setIsAdmin(false);
+    if (!savedUser) {
+      setIsAdmin(false);
+      return;
     }
-    fetchCourses();
+
+    try {
+      const parsed = JSON.parse(savedUser);
+      if (parsed.role !== 'ADMIN') {
+        setIsAdmin(false);
+        return;
+      }
+      setUserEmail(parsed.email || 'admin@ptut.com');
+      setIsAdmin(true);
+      fetchCourses();
+    } catch {
+      localStorage.removeItem('user');
+      setIsAdmin(false);
+    }
   }, []);
 
   // Fetch Courses from Supabase
@@ -114,14 +134,16 @@ export default function AdminDashboardPage() {
   // Fetch Quiz & MCQs based on Selected Module
   const fetchQuizAndMcqs = async (moduleId: string) => {
     setSelectedModuleId(moduleId);
-    const { data: quizData } = await supabase.from('quizzes').select('id').eq('module_id', moduleId).single();
-    if (quizData) {
-      setQuizId(quizData.id);
-      const { data: mcqData } = await supabase.from('mcqs').select('*').eq('quiz_id', quizData.id);
-      if (mcqData) setMcqs(mcqData);
-    } else {
+    try {
+      const response = await fetch(`/api/admin/mcqs?moduleId=${encodeURIComponent(moduleId)}`, { cache: 'no-store' });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Unable to load MCQs.');
+      setQuizId(result.quizId || '');
+      setMcqs(Array.isArray(result.mcqs) ? result.mcqs : []);
+    } catch (error) {
       setQuizId('');
       setMcqs([]);
+      showNotice(error instanceof Error ? error.message : 'Unable to load MCQs.', 'error');
     }
   };
 
@@ -133,13 +155,18 @@ export default function AdminDashboardPage() {
     if (!courseCode || !courseTitle) return;
     setLoading(true);
 
+    const normalizedCode = courseCode.trim().toUpperCase();
+    const safeBase = normalizedCode.replace(/[^A-Z0-9]/g, '') || `COURSE`;
+    let courseId = safeBase;
+    const { data: existingCourse } = await supabase.from('courses').select('id').eq('code', normalizedCode).maybeSingle();
+    if (existingCourse) courseId = `${safeBase}-${Date.now()}`;
+
     const { data, error } = await supabase.from('courses').insert([
       {
-        code: courseCode.trim().toUpperCase(),
+        id: courseId,
+        code: normalizedCode,
         title: courseTitle.trim(),
         category: courseCategory,
-        university: courseUniversity,
-        module_count: 0,
       },
     ]).select();
 
@@ -148,9 +175,9 @@ export default function AdminDashboardPage() {
       setCourseCode('');
       setCourseTitle('');
       fetchCourses();
-      alert('Course added successfully!');
+      showNotice('Course added successfully.');
     } else {
-      alert(error.message);
+      showNotice(error?.message || 'Course could not be added. Please try again.', 'error');
     }
   };
 
@@ -168,9 +195,11 @@ export default function AdminDashboardPage() {
     if (!selectedCourseId || !moduleTitle) return;
     setLoading(true);
 
-    const position = modules.length + 1;
+    const position = modules.length ? Math.max(...modules.map((module) => module.position || 0)) + 1 : 1;
+    const moduleId = crypto.randomUUID();
     const { data, error } = await supabase.from('modules').insert([
       {
+        id: moduleId,
         course_id: selectedCourseId,
         title: moduleTitle.trim(),
         content: moduleContent.trim() || 'Module content goes here...',
@@ -178,14 +207,23 @@ export default function AdminDashboardPage() {
       },
     ]).select();
 
+    if (!error && data?.[0]) {
+      await supabase.from('quizzes').insert([{
+        id: crypto.randomUUID(),
+        module_id: data[0].id,
+        subject: moduleTitle.trim(),
+      }]);
+
+    }
+
     setLoading(false);
     if (!error) {
       setModuleTitle('');
       setModuleContent('');
       fetchModules(selectedCourseId);
-      alert('Module added successfully!');
+      showNotice('Module added successfully.');
     } else {
-      alert(error.message);
+      showNotice(error?.message || 'Module could not be added. Please try again.', 'error');
     }
   };
 
@@ -200,36 +238,43 @@ export default function AdminDashboardPage() {
   // 3. Add / Edit MCQ
   const handleSaveMcq = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!quizId || !mcqQuestion || !optionA || !optionB || !optionC || !optionD) return;
+    if (!selectedModuleId || !mcqQuestion || !optionA || !optionB || !optionC || !optionD) return;
 
     setLoading(true);
-    const optionsArray = [optionA, optionB, optionC, optionD];
-
-    if (editingMcqId) {
-      await supabase.from('mcqs').update({
+    const response = await fetch('/api/admin/mcqs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        moduleId: selectedModuleId,
+        quizId,
+        mcqId: editingMcqId,
         question: mcqQuestion,
-        options: optionsArray,
-        correct_option: correctOption,
+        options: [optionA, optionB, optionC, optionD],
+        correctOption,
         explanation,
-      }).eq('id', editingMcqId);
-    } else {
-      await supabase.from('mcqs').insert([{
-        quiz_id: quizId,
-        question: mcqQuestion,
-        options: optionsArray,
-        correct_option: correctOption,
-        explanation,
-      }]);
-    }
-
+      }),
+    });
+    const result = await response.json();
     setLoading(false);
+    if (!response.ok) {
+      showNotice(result.error || 'MCQ could not be saved. Please try again.', 'error');
+      return;
+    }
+    if (result.quizId) setQuizId(result.quizId);
     setShowMcqForm(false);
+    showNotice(editingMcqId ? 'MCQ updated successfully.' : 'MCQ added successfully.');
     if (selectedModuleId) fetchQuizAndMcqs(selectedModuleId);
   };
 
   const handleDeleteMcq = async (mcqId: string) => {
     if (confirm('Delete this MCQ?')) {
-      await supabase.from('mcqs').delete().eq('id', mcqId);
+      const response = await fetch(`/api/admin/mcqs?id=${encodeURIComponent(mcqId)}`, { method: 'DELETE' });
+      const result = await response.json();
+      if (!response.ok) {
+        showNotice(result.error || 'MCQ could not be deleted.', 'error');
+        return;
+      }
+      showNotice('MCQ deleted successfully.');
       if (selectedModuleId) fetchQuizAndMcqs(selectedModuleId);
     }
   };
@@ -241,7 +286,7 @@ export default function AdminDashboardPage() {
 
   if (!isAdmin) {
     return (
-      <div className="min-h-screen bg-white flex flex-col justify-center items-center p-4 text-black">
+      <div className="min-h-screen bg-white flex flex-col justify-center items-center p-4 text-[#334155]">
         <h1 className="text-xl font-extrabold mb-2">Access Denied</h1>
         <p className="text-xs text-gray-600 mb-4">You need Admin privileges to view this page.</p>
         <Link href="/login" className="bg-teal-500 text-white px-4 py-2 rounded-xl text-xs font-bold">
@@ -252,7 +297,7 @@ export default function AdminDashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-white text-black font-sans flex flex-col justify-between">
+    <div className="min-h-screen bg-white text-[#14b8a6] font-sans flex flex-col justify-between">
       <div>
         {/* Header with Navigation Controls */}
         <header className="border-b-2 border-teal-500/20 px-6 py-3 flex items-center justify-between bg-white shadow-sm">
@@ -270,7 +315,10 @@ export default function AdminDashboardPage() {
               <div className="w-9 h-9 rounded-xl bg-teal-500 text-white flex items-center justify-center font-bold text-sm shadow-md">
                 <BookOpen className="w-5 h-5" />
               </div>
-              <span className="font-extrabold text-xl text-teal-600 tracking-tight">CampusNotes Admin</span>
+              <div>
+                <div className="text-lg font-black tracking-tight text-[#14b8a6]">CampusNotes</div>
+                <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#14b8a6]">Academic Library</div>
+              </div>
             </div>
           </div>
 
@@ -281,6 +329,12 @@ export default function AdminDashboardPage() {
             </button>
           </div>
         </header>
+
+        {notice && (
+          <div className={`mx-6 mt-4 rounded-xl border px-4 py-3 text-sm font-bold ${notice.type === 'success' ? 'border-teal-200 bg-teal-50 text-teal-800' : 'border-red-200 bg-red-50 text-red-700'}`} role="status">
+            {notice.text}
+          </div>
+        )}
 
         {/* Main Work Area */}
         <div className="max-w-7xl w-full mx-auto px-6 py-6 flex flex-col lg:flex-row gap-6">
@@ -316,7 +370,7 @@ export default function AdminDashboardPage() {
           {/* TAB 1: DASHBOARD VIEW */}
           {activeTab === 'Dashboard' && (
             <main className="flex-1">
-              <h1 className="text-xl font-black text-black mb-4">Dashboard Overview</h1>
+              <h1 className="text-xl font-black text-[#334155] mb-4">Dashboard Overview</h1>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="border-2 border-teal-500/30 rounded-2xl p-5 bg-teal-50/20 text-center">
                   <span className="text-3xl font-black text-teal-800 block mb-1">{courses.length}</span>
@@ -338,7 +392,7 @@ export default function AdminDashboardPage() {
           {activeTab === 'Courses' && (
             <main className="flex-1 flex flex-col lg:flex-row gap-6">
               <div className="flex-1">
-                <h1 className="text-xl font-black text-black mb-4">Manage Courses</h1>
+                <h1 className="text-xl font-black text-[#334155] mb-4">Manage Courses</h1>
                 <div className="border-2 border-teal-500/20 rounded-xl overflow-hidden bg-white shadow-sm">
                   <table className="w-full text-left text-xs border-collapse">
                     <thead>
@@ -356,7 +410,7 @@ export default function AdminDashboardPage() {
                         </tr>
                       ) : (
                         courses.map((c) => (
-                          <tr key={c.id} className="hover:bg-teal-50/30 text-gray-800">
+                          <tr key={c.id} className="hover:bg-teal-50/30 text-[#334155]">
                             <td className="p-3 border-r border-teal-100 font-black text-teal-800">{c.code}</td>
                             <td className="p-3 border-r border-teal-100 font-bold">{c.title}</td>
                             <td className="p-3 border-r border-teal-100">{c.category || 'CS'}</td>
@@ -388,7 +442,7 @@ export default function AdminDashboardPage() {
                       value={courseCode}
                       onChange={(e) => setCourseCode(e.target.value)}
                       required
-                      className="w-full border-2 border-teal-200 rounded-xl p-2.5 text-xs text-black focus:outline-none focus:border-teal-500 font-bold"
+                      className="w-full border-2 border-teal-200 rounded-xl p-2.5 text-xs text-[#334155] focus:outline-none focus:border-teal-500 font-bold"
                     />
                   </div>
 
@@ -400,7 +454,7 @@ export default function AdminDashboardPage() {
                       value={courseTitle}
                       onChange={(e) => setCourseTitle(e.target.value)}
                       required
-                      className="w-full border-2 border-teal-200 rounded-xl p-2.5 text-xs text-black focus:outline-none focus:border-teal-500 font-bold"
+                      className="w-full border-2 border-teal-200 rounded-xl p-2.5 text-xs text-[#334155] focus:outline-none focus:border-teal-500 font-bold"
                     />
                   </div>
 
@@ -409,12 +463,15 @@ export default function AdminDashboardPage() {
                     <select
                       value={courseCategory}
                       onChange={(e) => setCourseCategory(e.target.value)}
-                      className="w-full border-2 border-teal-200 rounded-xl p-2.5 text-xs text-black focus:outline-none focus:border-teal-500 font-bold bg-white"
+                      className="w-full border-2 border-teal-200 rounded-xl p-2.5 text-xs text-[#334155] focus:outline-none focus:border-teal-500 font-bold bg-white"
                     >
                       <option value="Computer Science">Computer Science</option>
                       <option value="Software Engineering">Software Engineering</option>
                       <option value="Information Technology">Information Technology</option>
                       <option value="Artificial Intelligence">Artificial Intelligence</option>
+                      <option value="Cyber Security">Cyber Security</option>
+                      <option value="Data Science">Data Science</option>
+                      <option value="Human Resources">Human Resources</option>
                     </select>
                   </div>
 
@@ -434,14 +491,14 @@ export default function AdminDashboardPage() {
           {activeTab === 'Modules' && (
             <main className="flex-1 flex flex-col lg:flex-row gap-6">
               <div className="flex-1">
-                <h1 className="text-xl font-black text-black mb-4">Manage Modules</h1>
+                <h1 className="text-xl font-black text-[#334155] mb-4">Manage Modules</h1>
 
                 <div className="mb-4">
                   <label className="block text-[10px] font-bold uppercase text-gray-500 mb-1">Select Course</label>
                   <select
                     value={selectedCourseId}
                     onChange={(e) => fetchModules(e.target.value)}
-                    className="w-full border-2 border-teal-500/30 rounded-xl p-2.5 bg-white text-xs font-bold text-black focus:outline-none focus:border-teal-500"
+                    className="w-full border-2 border-teal-500/30 rounded-xl p-2.5 bg-white text-xs font-bold text-[#334155] focus:outline-none focus:border-teal-500"
                   >
                     {courses.map((c) => (
                       <option key={c.id} value={c.id}>Course: {c.code} {c.title}</option>
@@ -465,7 +522,7 @@ export default function AdminDashboardPage() {
                         </tr>
                       ) : (
                         modules.map((m, idx) => (
-                          <tr key={m.id} className="hover:bg-teal-50/30 text-gray-800">
+                          <tr key={m.id} className="hover:bg-teal-50/30 text-[#334155]">
                             <td className="p-3 border-r border-teal-100 text-center font-bold">{idx + 1}</td>
                             <td className="p-3 border-r border-teal-100 font-bold">{m.title}</td>
                             <td className="p-3 text-center">
@@ -496,7 +553,7 @@ export default function AdminDashboardPage() {
                       value={moduleTitle}
                       onChange={(e) => setModuleTitle(e.target.value)}
                       required
-                      className="w-full border-2 border-teal-200 rounded-xl p-2.5 text-xs text-black focus:outline-none focus:border-teal-500 font-bold"
+                      className="w-full border-2 border-teal-200 rounded-xl p-2.5 text-xs text-[#334155] focus:outline-none focus:border-teal-500 font-bold"
                     />
                   </div>
 
@@ -504,11 +561,14 @@ export default function AdminDashboardPage() {
                     <label className="block text-[11px] font-bold text-gray-700 mb-1">Module Content</label>
                     <textarea
                       rows={5}
-                      placeholder="Write module text here..."
+                      placeholder="Write Markdown here: use tables, images, numbered steps, and code blocks..."
                       value={moduleContent}
                       onChange={(e) => setModuleContent(e.target.value)}
-                      className="w-full border-2 border-teal-200 rounded-xl p-2.5 text-xs text-black focus:outline-none focus:border-teal-500 font-mono"
+                      className="w-full border-2 border-teal-200 rounded-xl p-2.5 text-xs text-[#334155] focus:outline-none focus:border-teal-500 font-mono"
                     />
+                    <p className="mt-2 text-[10px] leading-relaxed text-gray-500">
+                      Supported: Markdown tables, images, algorithms/code blocks, lists, and headings.
+                    </p>
                   </div>
 
                   <button
@@ -528,7 +588,7 @@ export default function AdminDashboardPage() {
             <main className="flex-1 flex flex-col lg:flex-row gap-6">
               <div className="flex-1">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-                  <h1 className="text-xl font-black text-black">MCQ Bank Management</h1>
+                  <h1 className="text-xl font-black text-[#334155]">MCQ Bank Management</h1>
                   <button
                     onClick={() => {
                       setEditingMcqId(null);
@@ -551,7 +611,7 @@ export default function AdminDashboardPage() {
                     <select
                       value={selectedCourseId}
                       onChange={(e) => fetchModules(e.target.value)}
-                      className="w-full border-2 border-teal-500/30 rounded-xl p-2.5 bg-white text-xs font-bold text-black focus:outline-none focus:border-teal-500"
+                      className="w-full border-2 border-teal-500/30 rounded-xl p-2.5 bg-white text-xs font-bold text-[#334155] focus:outline-none focus:border-teal-500"
                     >
                       {courses.map((c) => (
                         <option key={c.id} value={c.id}>Course: {c.code} {c.title}</option>
@@ -564,7 +624,7 @@ export default function AdminDashboardPage() {
                     <select
                       value={selectedModuleId}
                       onChange={(e) => fetchQuizAndMcqs(e.target.value)}
-                      className="w-full border-2 border-teal-500/30 rounded-xl p-2.5 bg-white text-xs font-bold text-black focus:outline-none focus:border-teal-500"
+                      className="w-full border-2 border-teal-500/30 rounded-xl p-2.5 bg-white text-xs font-bold text-[#334155] focus:outline-none focus:border-teal-500"
                     >
                       {modules.map((m, idx) => (
                         <option key={m.id} value={m.id}>Module {idx + 1}: {m.title}</option>
@@ -592,7 +652,7 @@ export default function AdminDashboardPage() {
                         </tr>
                       ) : (
                         mcqs.map((mcq, idx) => (
-                          <tr key={mcq.id} className="hover:bg-teal-50/30 text-gray-800">
+                          <tr key={mcq.id} className="hover:bg-teal-50/30 text-[#334155]">
                             <td className="p-3 border-r border-teal-100 text-center font-bold">{idx + 1}</td>
                             <td className="p-3 border-r border-teal-100 font-medium">{mcq.question}</td>
                             <td className="p-3 border-r border-teal-100 text-center font-black text-teal-800">
@@ -623,28 +683,28 @@ export default function AdminDashboardPage() {
                         value={mcqQuestion}
                         onChange={(e) => setMcqQuestion(e.target.value)}
                         required
-                        className="w-full border-2 border-teal-200 rounded-xl p-2 text-xs text-black"
+                        className="w-full border-2 border-teal-200 rounded-xl p-2 text-xs text-[#334155]"
                       />
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-gray-600 mb-0.5">Option A</label>
-                      <input type="text" value={optionA} onChange={(e) => setOptionA(e.target.value)} required className="w-full border border-teal-200 rounded-lg p-1.5 text-xs text-black" />
+                      <input type="text" value={optionA} onChange={(e) => setOptionA(e.target.value)} required className="w-full border border-teal-200 rounded-lg p-1.5 text-xs text-[#334155]" />
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-gray-600 mb-0.5">Option B</label>
-                      <input type="text" value={optionB} onChange={(e) => setOptionB(e.target.value)} required className="w-full border border-teal-200 rounded-lg p-1.5 text-xs text-black" />
+                      <input type="text" value={optionB} onChange={(e) => setOptionB(e.target.value)} required className="w-full border border-teal-200 rounded-lg p-1.5 text-xs text-[#334155]" />
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-gray-600 mb-0.5">Option C</label>
-                      <input type="text" value={optionC} onChange={(e) => setOptionC(e.target.value)} required className="w-full border border-teal-200 rounded-lg p-1.5 text-xs text-black" />
+                      <input type="text" value={optionC} onChange={(e) => setOptionC(e.target.value)} required className="w-full border border-teal-200 rounded-lg p-1.5 text-xs text-[#334155]" />
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-gray-600 mb-0.5">Option D</label>
-                      <input type="text" value={optionD} onChange={(e) => setOptionD(e.target.value)} required className="w-full border border-teal-200 rounded-lg p-1.5 text-xs text-black" />
+                      <input type="text" value={optionD} onChange={(e) => setOptionD(e.target.value)} required className="w-full border border-teal-200 rounded-lg p-1.5 text-xs text-[#334155]" />
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-gray-600 mb-1">Correct Option</label>
-                      <div className="flex gap-3 text-xs font-bold text-black">
+                      <div className="flex gap-3 text-xs font-bold text-[#334155]">
                         {['A', 'B', 'C', 'D'].map((letter, idx) => (
                           <label key={letter} className="flex items-center gap-1 cursor-pointer">
                             <input type="radio" name="correctOpt" checked={correctOption === idx} onChange={() => setCorrectOption(idx)} />
@@ -655,7 +715,7 @@ export default function AdminDashboardPage() {
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-gray-600 mb-1">Explanation</label>
-                      <textarea rows={2} value={explanation} onChange={(e) => setExplanation(e.target.value)} className="w-full border-2 border-teal-200 rounded-xl p-2 text-xs text-black" />
+                      <textarea rows={2} value={explanation} onChange={(e) => setExplanation(e.target.value)} className="w-full border-2 border-teal-200 rounded-xl p-2 text-xs text-[#334155]" />
                     </div>
                     <div className="flex gap-2 pt-2">
                       <button type="submit" className="flex-1 bg-teal-500 text-white py-2 rounded-xl text-xs font-bold hover:bg-teal-600">Save</button>
