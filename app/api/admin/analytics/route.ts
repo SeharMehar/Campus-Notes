@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { getSessionFromRequest } from '@/lib/session';
 
-export const dynamic = 'force-dynamic';
 
 interface EventRow {
   created_at: string;
