@@ -1,0 +1,114 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #0f172a;
+}
+
+@theme {
+  --color-teal-50: #e8f8f1; --color-teal-100: #cdf0e0; --color-teal-200: #9fe3c6; --color-teal-300: #6fd3a9;
+  --color-teal-400: #2fc088; --color-teal-500: #04AA6D; --color-teal-600: #059862; --color-teal-700: #047a50;
+  --color-teal-800: #05603f; --color-teal-900: #064a33;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--background);
+  color: #334155;
+  font-family: 'Segoe UI', Arial, sans-serif;
+}
+
+::selection { background: #ccfbf1; color: #115e59; }
+
+/* Hero background: deep teal gradient with soft glows and a subtle dot grid */
+.hero-bg {
+  background:
+    radial-gradient(40rem 24rem at 85% 0%, rgba(4, 170, 109, .35), transparent 60%),
+    #282A35;
+}
+@keyframes spin-slow { to { transform: rotate(360deg); } }
+.spin-slow { animation: spin-slow 60s linear infinite; }
+.dot-grid {
+  background-image: radial-gradient(rgba(255,255,255,.18) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+@keyframes floaty { 0%,100% { transform: translateY(0) rotate(var(--r, 0deg)); } 50% { transform: translateY(-10px) rotate(var(--r, 0deg)); } }
+.floaty { animation: floaty 6s ease-in-out infinite; }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+.fade-up { animation: fadeUp .6s ease both; }
+@keyframes blink { 50% { opacity: 0; } }
+.cursor-blink::after { content: '▍'; margin-left: 2px; color: #14b8a6; animation: blink 1s steps(1) infinite; }
+
+/* Nicely styled AI summary / note typography */
+.prose-ai h2 { font-size: 1.05rem; font-weight: 800; color: #0f172a; margin: 1.4rem 0 .6rem; display: flex; align-items: center; gap: .5rem; }
+.prose-ai h2::before { content: ''; width: 4px; height: 1.1em; border-radius: 4px; background: linear-gradient(#2dd4bf, #0f766e); }
+.prose-ai h3 { font-size: .95rem; font-weight: 700; color: #0f766e; margin: 1rem 0 .3rem; }
+.prose-ai p { margin: .5rem 0; line-height: 1.75; }
+.prose-ai ul { list-style: disc; margin: .5rem 0 .5rem 1.25rem; }
+.prose-ai ol { list-style: decimal; margin: .5rem 0 .5rem 1.25rem; }
+.prose-ai li { margin: .3rem 0; line-height: 1.7; }
+.prose-ai li::marker { color: #14b8a6; font-weight: 700; }
+.prose-ai strong { color: #0f172a; font-weight: 700; }
+.prose-ai code { background: #ccfbf1; color: #115e59; padding: .1rem .4rem; border-radius: .4rem; font-size: .85em; }
+.prose-ai blockquote { border-left: 4px solid #14b8a6; background: #f0fdfa; padding: .6rem 1rem; border-radius: 0 .75rem .75rem 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .floaty, .fade-up, .spin-slow, .cursor-blink::after { animation: none; }
+}
+
+/* W3Schools-like buttons */
+.w3-btn { display:inline-flex; align-items:center; gap:.4rem; background:#04AA6D; color:#fff; font-weight:600; padding:.55rem 1.1rem; border-radius:.25rem; transition:background .15s; }
+.w3-btn:hover { background:#059862; }
+.w3-btn-dark { background:#282A35; }
+.w3-btn-dark:hover { background:#3d4052; }
+.w3-btn[disabled], .w3-btn:disabled { opacity:.45; cursor:not-allowed; }
+.w3-example { background:#E7E9EB; border-left:5px solid #04AA6D; padding:1rem 1.25rem; }
+
+/* ---------- Dark theme ----------
+   Tailwind colours are CSS variables, so the dark theme just re-maps the palette.
+   The .dark class is set on <html> by ThemeToggle / the script in layout.tsx. */
+html.dark {
+  color-scheme: dark;
+  --background: #12141c;
+  --foreground: #e4e8f3;
+  --color-slate-50: #1c2030; --color-slate-100: #232838; --color-slate-200: #303650; --color-slate-300: #434a66;
+  --color-slate-400: #8890aa; --color-slate-500: #a2a9c0; --color-slate-600: #bcc2d6; --color-slate-700: #d2d7e6;
+  --color-slate-800: #e4e8f3; --color-slate-900: #f3f5fb;
+  --color-gray-50: #1c2030; --color-gray-100: #232838; --color-gray-200: #303650; --color-gray-300: #434a66;
+  --color-gray-500: #a2a9c0; --color-gray-600: #bcc2d6; --color-gray-700: #d2d7e6; --color-gray-800: #e4e8f3;
+  --color-teal-50: #12302a; --color-teal-100: #17402f; --color-teal-200: #226049; --color-teal-700: #5fd9a2;
+  --color-teal-800: #8be8bd; --color-teal-900: #b4f1d3;
+  --color-green-50: #12301f; --color-green-300: #226049; --color-green-700: #86efac; --color-green-800: #86efac;
+  --color-red-50: #3a1a1e; --color-red-200: #7a2c33; --color-red-600: #fca5a5; --color-red-700: #fca5a5;
+  --color-amber-50: #3a2e12; --color-amber-200: #7a5c1a; --color-amber-800: #fcd34d;
+}
+html.dark body { background: #12141c; color: #cfd5e6; }
+html.dark .bg-white { background-color: #1b1f2e; }
+html.dark .hover\:bg-white:hover { background-color: #2a3044; }
+html.dark .bg-\[\#E7E9EB\] { background-color: #232838; }
+html.dark .bg-\[\#f1f1f1\], html.dark .even\:bg-\[\#f1f1f1\]:nth-child(even) { background-color: #1f2434; }
+html.dark .hover\:bg-\[\#d8dbdd\]:hover { background-color: #2f3650; }
+html.dark .bg-\[\#d8dbdd\] { background-color: #2a3044; }
+html.dark .text-\[\#334155\] { color: #d2d7e6; }
+html.dark .w3-example { background: #232838; }
+html.dark .prose-ai h2, html.dark .prose-ai strong { color: #f3f5fb; }
+html.dark .prose-ai code { background: #17402f; color: #8be8bd; }
+html.dark .prose-ai blockquote { background: #12302a; }
+html.dark input, html.dark textarea, html.dark select { background-color: #1b1f2e; color: #e4e8f3; border-color: #434a66; }
+html.dark ::placeholder { color: #8890aa; }
+
+/* ---------- Print: notes only (Print / Save as PDF button) ---------- */
+@media print {
+  header, footer, aside, nav, .no-print { display: none !important; }
+  body { background: #fff !important; color: #000 !important; }
+  main { padding: 0 !important; }
+}
