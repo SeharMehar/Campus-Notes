@@ -1,4 +1,4 @@
-// app/admin/page.tsx
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -40,30 +40,30 @@ export default function AdminDashboardPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [userEmail, setUserEmail] = useState('admin@ptut');
 
-  // Sidebar Active Tab State: 'Dashboard' | 'Courses' | 'Modules' | 'MCQ Banks'
+  
   const [activeTab, setActiveTab] = useState('Analytics');
 
-  // Core Data States
+  
   const [courses, setCourses] = useState<Course[]>([]);
   const [modules, setModules] = useState<Module[]>([]);
   const [mcqs, setMcqs] = useState<MCQ[]>([]);
 
-  // Selection States
+  
   const [selectedCourseId, setSelectedCourseId] = useState<string>('');
   const [selectedModuleId, setSelectedModuleId] = useState<string>('');
   const [quizId, setQuizId] = useState<string>('');
 
-  // Course Form States
+  
   const [courseCode, setCourseCode] = useState('');
   const [courseTitle, setCourseTitle] = useState('');
   const [courseCategory, setCourseCategory] = useState('Computer Science');
   const [courseUniversity, setCourseUniversity] = useState('PTUT');
 
-  // Module Form States
+  
   const [moduleTitle, setModuleTitle] = useState('');
   const [moduleContent, setModuleContent] = useState('');
 
-  // MCQ Form States
+  
   const [showMcqForm, setShowMcqForm] = useState(false);
   const [editingMcqId, setEditingMcqId] = useState<string | null>(null);
   const [mcqQuestion, setMcqQuestion] = useState('');
@@ -105,7 +105,7 @@ export default function AdminDashboardPage() {
     }
   }, []);
 
-  // Fetch Courses from Supabase
+  
   const fetchCourses = async () => {
     const { data } = await supabase.from('courses').select('*').order('created_at', { ascending: false });
     if (data && data.length > 0) {
@@ -119,7 +119,7 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // Fetch Modules based on Selected Course
+  
   const fetchModules = async (courseId: string) => {
     setSelectedCourseId(courseId);
     const { data } = await supabase.from('modules').select('*').eq('course_id', courseId).order('position', { ascending: true });
@@ -134,7 +134,7 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // Fetch Quiz & MCQs based on Selected Module
+  
   const fetchQuizAndMcqs = async (moduleId: string) => {
     setSelectedModuleId(moduleId);
     try {
@@ -150,9 +150,9 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // --- ACTIONS ---
+  
 
-  // 1. Add New Course
+  
   const handleAddCourse = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!courseCode || !courseTitle) return;
@@ -184,7 +184,7 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // Delete Course
+  
   const handleDeleteCourse = async (courseId: string) => {
     if (confirm('Are you sure you want to delete this course? All associated modules will be deleted.')) {
       await supabase.from('courses').delete().eq('id', courseId);
@@ -192,7 +192,7 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // 2. Add New Module
+  
   const handleAddModule = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCourseId || !moduleTitle) return;
@@ -230,7 +230,7 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // Delete Module
+  
   const handleDeleteModule = async (moduleId: string) => {
     if (confirm('Are you sure you want to delete this module?')) {
       await supabase.from('modules').delete().eq('id', moduleId);
@@ -238,7 +238,7 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // 3. Add / Edit MCQ
+  
   const handleSaveMcq = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedModuleId || !mcqQuestion || !optionA || !optionB || !optionC || !optionD) return;
@@ -293,7 +293,7 @@ export default function AdminDashboardPage() {
       <div className="min-h-screen bg-white flex flex-col justify-center items-center p-4 text-slate-800">
         <h1 className="text-xl font-extrabold mb-2">Access Denied</h1>
         <p className="text-xs text-gray-600 mb-4">You need Admin privileges to view this page.</p>
-        <Link href="/login" className="bg-teal-500 text-white px-4 py-2 rounded text-xs font-bold">
+        <Link href="/login" className="bg-orange-500 text-white px-4 py-2 rounded text-xs font-bold">
           Go to Login
         </Link>
       </div>
@@ -303,12 +303,12 @@ export default function AdminDashboardPage() {
   return (
     <div className="min-h-screen bg-white text-slate-800 font-sans flex flex-col justify-between">
       <div>
-        {/* Header with Navigation Controls */}
+        {}
         <SiteHeader>
           <div className="flex items-center gap-3 text-xs font-semibold text-slate-700">
             <span className="hidden font-bold text-white sm:inline">{userEmail}</span>
-            <button onClick={() => router.back()} title="Go Back" className="rounded border border-slate-200 bg-white p-2 transition hover:bg-teal-50"><ArrowLeft className="h-4 w-4" /></button>
-            <button onClick={handleLogout} className="rounded bg-[#04AA6D] px-4 py-2 font-bold text-white transition hover:bg-[#059862]">Logout</button>
+            <button onClick={() => router.back()} title="Go Back" className="rounded border border-slate-200 bg-white p-2 transition hover:bg-orange-50"><ArrowLeft className="h-4 w-4" /></button>
+            <button onClick={handleLogout} className="rounded bg-[#b85c38] px-4 py-2 font-bold text-white transition hover:bg-[#a45232]">Logout</button>
           </div>
         </SiteHeader>
 
@@ -318,10 +318,10 @@ export default function AdminDashboardPage() {
           </div>
         )}
 
-        {/* Main Work Area */}
+        {}
         <div className="max-w-7xl w-full mx-auto px-6 py-6 flex flex-col lg:flex-row gap-6">
-          {/* Sidebar Tabs */}
-          <aside className="w-full lg:w-56 bg-[#E7E9EB] p-2 shrink-0 self-start">
+          {}
+          <aside className="w-full lg:w-56 bg-[#f1ece5] p-2 shrink-0 self-start">
             <div className="space-y-2">
               {[
                 { name: 'Dashboard', icon: LayoutDashboard },
@@ -338,11 +338,11 @@ export default function AdminDashboardPage() {
                     onClick={() => setActiveTab(tab.name)}
                     className={`w-full text-left px-4 py-2.5 rounded text-xs font-bold transition flex items-center gap-2.5 ${
                       isActive
-                        ? 'bg-[#04AA6D] text-white'
+                        ? 'bg-[#b85c38] text-white'
                         : 'text-slate-800 hover:bg-white'
                     }`}
                   >
-                    <Icon className="w-4 h-4 text-teal-600" />
+                    <Icon className="w-4 h-4 text-orange-600" />
                     {tab.name}
                   </button>
                 );
@@ -350,31 +350,31 @@ export default function AdminDashboardPage() {
             </div>
           </aside>
 
-          {/* ANALYTICS */}
+          {}
           {activeTab === 'Analytics' && <AnalyticsPanel />}
 
-          {/* TAB 1: DASHBOARD VIEW */}
+          {}
           {activeTab === 'Dashboard' && (
             <main className="flex-1">
               <h1 className="text-3xl font-bold text-slate-900 mb-4">Dashboard Overview</h1>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="border-b-4 border-[#04AA6D] bg-[#E7E9EB] p-5 text-center">
-                  <span className="text-3xl font-black text-teal-800 block mb-1">{courses.length}</span>
+                <div className="border-b-4 border-[#b85c38] bg-[#f1ece5] p-5 text-center">
+                  <span className="text-3xl font-black text-orange-800 block mb-1">{courses.length}</span>
                   <span className="text-xs font-bold text-gray-600">Total Courses</span>
                 </div>
-                <div className="border-b-4 border-[#04AA6D] bg-[#E7E9EB] p-5 text-center">
-                  <span className="text-3xl font-black text-teal-800 block mb-1">{modules.length}</span>
+                <div className="border-b-4 border-[#b85c38] bg-[#f1ece5] p-5 text-center">
+                  <span className="text-3xl font-black text-orange-800 block mb-1">{modules.length}</span>
                   <span className="text-xs font-bold text-gray-600">Modules (Selected Course)</span>
                 </div>
-                <div className="border-b-4 border-[#04AA6D] bg-[#E7E9EB] p-5 text-center">
-                  <span className="text-3xl font-black text-teal-800 block mb-1">{mcqs.length}</span>
+                <div className="border-b-4 border-[#b85c38] bg-[#f1ece5] p-5 text-center">
+                  <span className="text-3xl font-black text-orange-800 block mb-1">{mcqs.length}</span>
                   <span className="text-xs font-bold text-gray-600">MCQs (Selected Module)</span>
                 </div>
               </div>
             </main>
           )}
 
-          {/* TAB 2: COURSES MANAGEMENT VIEW */}
+          {}
           {activeTab === 'Courses' && (
             <main className="flex-1 flex flex-col lg:flex-row gap-6">
               <div className="flex-1">
@@ -382,7 +382,7 @@ export default function AdminDashboardPage() {
                 <div className="overflow-x-auto bg-white">
                   <table className="w-full text-left text-xs border-collapse">
                     <thead>
-                      <tr className="bg-[#04AA6D] text-white font-bold">
+                      <tr className="bg-[#b85c38] text-white font-bold">
                         <th className="p-3 border-r border-white/30 w-24">Code</th>
                         <th className="p-3 border-r border-white/30">Course Title</th>
                         <th className="p-3 border-r border-white/30">Category</th>
@@ -396,8 +396,8 @@ export default function AdminDashboardPage() {
                         </tr>
                       ) : (
                         courses.map((c) => (
-                          <tr key={c.id} className="even:bg-[#f1f1f1] hover:bg-teal-50 text-slate-800">
-                            <td className="p-3 border-r border-slate-200 font-black text-teal-800">{c.code}</td>
+                          <tr key={c.id} className="even:bg-[#f4efe8] hover:bg-orange-50 text-slate-800">
+                            <td className="p-3 border-r border-slate-200 font-black text-orange-800">{c.code}</td>
                             <td className="p-3 border-r border-slate-200 font-bold">{c.title}</td>
                             <td className="p-3 border-r border-slate-200">{c.category || 'CS'}</td>
                             <td className="p-3 text-center">
@@ -413,8 +413,8 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
 
-              {/* Add New Course Form */}
-              <aside className="w-full lg:w-80 bg-[#E7E9EB] p-5 shrink-0">
+              {}
+              <aside className="w-full lg:w-80 bg-[#f1ece5] p-5 shrink-0">
                 <form onSubmit={handleAddCourse} className="space-y-4">
                   <h2 className="text-lg font-bold text-slate-900 pb-2 border-b border-slate-300 flex items-center gap-1">
                     <Plus className="w-4 h-4" /> Add New Course
@@ -428,7 +428,7 @@ export default function AdminDashboardPage() {
                       value={courseCode}
                       onChange={(e) => setCourseCode(e.target.value)}
                       required
-                      className="w-full border border-slate-300 rounded p-2.5 text-xs text-slate-800 focus:outline-none focus:border-teal-500 font-bold"
+                      className="w-full border border-slate-300 rounded p-2.5 text-xs text-slate-800 focus:outline-none focus:border-orange-500 font-bold"
                     />
                   </div>
 
@@ -440,7 +440,7 @@ export default function AdminDashboardPage() {
                       value={courseTitle}
                       onChange={(e) => setCourseTitle(e.target.value)}
                       required
-                      className="w-full border border-slate-300 rounded p-2.5 text-xs text-slate-800 focus:outline-none focus:border-teal-500 font-bold"
+                      className="w-full border border-slate-300 rounded p-2.5 text-xs text-slate-800 focus:outline-none focus:border-orange-500 font-bold"
                     />
                   </div>
 
@@ -449,7 +449,7 @@ export default function AdminDashboardPage() {
                     <select
                       value={courseCategory}
                       onChange={(e) => setCourseCategory(e.target.value)}
-                      className="w-full border border-slate-300 rounded p-2.5 text-xs text-slate-800 focus:outline-none focus:border-teal-500 font-bold bg-white"
+                      className="w-full border border-slate-300 rounded p-2.5 text-xs text-slate-800 focus:outline-none focus:border-orange-500 font-bold bg-white"
                     >
                       <option value="Computer Science">Computer Science</option>
                       <option value="Software Engineering">Software Engineering</option>
@@ -464,7 +464,7 @@ export default function AdminDashboardPage() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full bg-teal-500 text-white font-bold text-xs py-3 rounded hover:bg-teal-600 transition shadow-md mt-2"
+                    className="w-full bg-orange-500 text-white font-bold text-xs py-3 rounded hover:bg-orange-600 transition shadow-md mt-2"
                   >
                     {loading ? 'Creating...' : '+ Create Course'}
                   </button>
@@ -473,7 +473,7 @@ export default function AdminDashboardPage() {
             </main>
           )}
 
-          {/* TAB 3: MODULES MANAGEMENT VIEW */}
+          {}
           {activeTab === 'Modules' && (
             <main className="flex-1 flex flex-col lg:flex-row gap-6">
               <div className="flex-1">
@@ -484,7 +484,7 @@ export default function AdminDashboardPage() {
                   <select
                     value={selectedCourseId}
                     onChange={(e) => fetchModules(e.target.value)}
-                    className="w-full border border-slate-300 rounded p-2.5 bg-white text-xs font-bold text-slate-800 focus:outline-none focus:border-teal-500"
+                    className="w-full border border-slate-300 rounded p-2.5 bg-white text-xs font-bold text-slate-800 focus:outline-none focus:border-orange-500"
                   >
                     {courses.map((c) => (
                       <option key={c.id} value={c.id}>Course: {c.code} {c.title}</option>
@@ -495,7 +495,7 @@ export default function AdminDashboardPage() {
                 <div className="overflow-x-auto bg-white">
                   <table className="w-full text-left text-xs border-collapse">
                     <thead>
-                      <tr className="bg-[#04AA6D] text-white font-bold">
+                      <tr className="bg-[#b85c38] text-white font-bold">
                         <th className="p-3 border-r border-white/30 w-12 text-center">#</th>
                         <th className="p-3 border-r border-white/30">Module Title</th>
                         <th className="p-3 text-center w-20">Actions</th>
@@ -508,7 +508,7 @@ export default function AdminDashboardPage() {
                         </tr>
                       ) : (
                         modules.map((m, idx) => (
-                          <tr key={m.id} className="even:bg-[#f1f1f1] hover:bg-teal-50 text-slate-800">
+                          <tr key={m.id} className="even:bg-[#f4efe8] hover:bg-orange-50 text-slate-800">
                             <td className="p-3 border-r border-slate-200 text-center font-bold">{idx + 1}</td>
                             <td className="p-3 border-r border-slate-200 font-bold">{m.title}</td>
                             <td className="p-3 text-center">
@@ -524,8 +524,8 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
 
-              {/* Add New Module Form */}
-              <aside className="w-full lg:w-80 bg-[#E7E9EB] p-5 shrink-0">
+              {}
+              <aside className="w-full lg:w-80 bg-[#f1ece5] p-5 shrink-0">
                 <form onSubmit={handleAddModule} className="space-y-4">
                   <h2 className="text-lg font-bold text-slate-900 pb-2 border-b border-slate-300 flex items-center gap-1">
                     <Plus className="w-4 h-4" /> Add Module to Course
@@ -539,7 +539,7 @@ export default function AdminDashboardPage() {
                       value={moduleTitle}
                       onChange={(e) => setModuleTitle(e.target.value)}
                       required
-                      className="w-full border border-slate-300 rounded p-2.5 text-xs text-slate-800 focus:outline-none focus:border-teal-500 font-bold"
+                      className="w-full border border-slate-300 rounded p-2.5 text-xs text-slate-800 focus:outline-none focus:border-orange-500 font-bold"
                     />
                   </div>
 
@@ -550,7 +550,7 @@ export default function AdminDashboardPage() {
                       placeholder="Write Markdown here: use tables, images, numbered steps, and code blocks..."
                       value={moduleContent}
                       onChange={(e) => setModuleContent(e.target.value)}
-                      className="w-full border border-slate-300 rounded p-2.5 text-xs text-slate-800 focus:outline-none focus:border-teal-500 font-mono"
+                      className="w-full border border-slate-300 rounded p-2.5 text-xs text-slate-800 focus:outline-none focus:border-orange-500 font-mono"
                     />
                     <p className="mt-2 text-[10px] leading-relaxed text-gray-500">
                       Supported: Markdown tables, images, algorithms/code blocks, lists, and headings.
@@ -560,7 +560,7 @@ export default function AdminDashboardPage() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full bg-teal-500 text-white font-bold text-xs py-3 rounded hover:bg-teal-600 transition shadow-md"
+                    className="w-full bg-orange-500 text-white font-bold text-xs py-3 rounded hover:bg-orange-600 transition shadow-md"
                   >
                     {loading ? 'Adding...' : '+ Add Module'}
                   </button>
@@ -569,7 +569,7 @@ export default function AdminDashboardPage() {
             </main>
           )}
 
-          {/* TAB 4: MCQ BANKS MANAGEMENT VIEW */}
+          {}
           {activeTab === 'MCQ Banks' && (
             <main className="flex-1 flex flex-col lg:flex-row gap-6">
               <div className="flex-1">
@@ -585,7 +585,7 @@ export default function AdminDashboardPage() {
                       setOptionD('');
                       setShowMcqForm(true);
                     }}
-                    className="bg-teal-500 text-white px-5 py-2 rounded text-xs font-bold hover:bg-teal-600 transition shrink-0 shadow-sm"
+                    className="bg-orange-500 text-white px-5 py-2 rounded text-xs font-bold hover:bg-orange-600 transition shrink-0 shadow-sm"
                   >
                     + Add MCQ
                   </button>
@@ -597,7 +597,7 @@ export default function AdminDashboardPage() {
                     <select
                       value={selectedCourseId}
                       onChange={(e) => fetchModules(e.target.value)}
-                      className="w-full border border-slate-300 rounded p-2.5 bg-white text-xs font-bold text-slate-800 focus:outline-none focus:border-teal-500"
+                      className="w-full border border-slate-300 rounded p-2.5 bg-white text-xs font-bold text-slate-800 focus:outline-none focus:border-orange-500"
                     >
                       {courses.map((c) => (
                         <option key={c.id} value={c.id}>Course: {c.code} {c.title}</option>
@@ -610,7 +610,7 @@ export default function AdminDashboardPage() {
                     <select
                       value={selectedModuleId}
                       onChange={(e) => fetchQuizAndMcqs(e.target.value)}
-                      className="w-full border border-slate-300 rounded p-2.5 bg-white text-xs font-bold text-slate-800 focus:outline-none focus:border-teal-500"
+                      className="w-full border border-slate-300 rounded p-2.5 bg-white text-xs font-bold text-slate-800 focus:outline-none focus:border-orange-500"
                     >
                       {modules.map((m, idx) => (
                         <option key={m.id} value={m.id}>Module {idx + 1}: {m.title}</option>
@@ -622,7 +622,7 @@ export default function AdminDashboardPage() {
                 <div className="overflow-x-auto bg-white">
                   <table className="w-full text-left text-xs border-collapse">
                     <thead>
-                      <tr className="bg-[#04AA6D] text-white font-bold">
+                      <tr className="bg-[#b85c38] text-white font-bold">
                         <th className="p-3 border-r border-white/30 w-10 text-center">#</th>
                         <th className="p-3 border-r border-white/30">Question</th>
                         <th className="p-3 border-r border-white/30 w-16 text-center">Correct</th>
@@ -638,10 +638,10 @@ export default function AdminDashboardPage() {
                         </tr>
                       ) : (
                         mcqs.map((mcq, idx) => (
-                          <tr key={mcq.id} className="even:bg-[#f1f1f1] hover:bg-teal-50 text-slate-800">
+                          <tr key={mcq.id} className="even:bg-[#f4efe8] hover:bg-orange-50 text-slate-800">
                             <td className="p-3 border-r border-slate-200 text-center font-bold">{idx + 1}</td>
                             <td className="p-3 border-r border-slate-200 font-medium">{mcq.question}</td>
-                            <td className="p-3 border-r border-slate-200 text-center font-black text-teal-800">
+                            <td className="p-3 border-r border-slate-200 text-center font-black text-orange-800">
                               {String.fromCharCode(65 + mcq.correct_option)}
                             </td>
                             <td className="p-3 text-center">
@@ -657,9 +657,9 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
 
-              {/* MCQ Form Side Panel */}
+              {}
               {showMcqForm && (
-                <aside className="w-full lg:w-80 bg-[#E7E9EB] p-5 shrink-0">
+                <aside className="w-full lg:w-80 bg-[#f1ece5] p-5 shrink-0">
                   <form onSubmit={handleSaveMcq} className="space-y-3">
                     <h2 className="text-lg font-bold text-slate-900 pb-2 border-b border-slate-300">Add MCQ</h2>
                     <div>
@@ -704,8 +704,8 @@ export default function AdminDashboardPage() {
                       <textarea rows={2} value={explanation} onChange={(e) => setExplanation(e.target.value)} className="w-full border border-slate-300 rounded p-2 text-xs text-slate-800" />
                     </div>
                     <div className="flex gap-2 pt-2">
-                      <button type="submit" className="flex-1 bg-teal-500 text-white py-2 rounded text-xs font-bold hover:bg-teal-600">Save</button>
-                      <button type="button" onClick={() => setShowMcqForm(false)} className="flex-1 border border-teal-500 text-teal-800 py-2 rounded text-xs font-bold">Cancel</button>
+                      <button type="submit" className="flex-1 bg-orange-500 text-white py-2 rounded text-xs font-bold hover:bg-orange-600">Save</button>
+                      <button type="button" onClick={() => setShowMcqForm(false)} className="flex-1 border border-orange-500 text-orange-800 py-2 rounded text-xs font-bold">Cancel</button>
                     </div>
                   </form>
                 </aside>

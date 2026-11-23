@@ -1,35 +1,35 @@
 import Link from 'next/link';
 
-/** CampusNotes project logo + wordmark. */
+
 export function Brand({ light = false }: { light?: boolean }) {
   return (
     <Link href="/" className="flex items-center gap-3" aria-label="CampusNotes home">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/logos/campusnotes.svg" alt="CampusNotes logo" className="h-12 w-12 drop-shadow-md" />
+      {}
+      <img src="/logos/campusnotes-mark.svg" alt="CampusNotes logo" className="h-10 w-10 shrink-0 sm:h-11 sm:w-11" />
       <div className="leading-tight">
-        <div className={`text-xl font-black tracking-tight ${light ? 'text-white' : 'text-[#082a4d]'}`}>
-          Campus<span className={`${light ? 'text-[#2ee89e]' : 'text-green-600'}`}>Notes</span>
+        <div className={`text-[19px] font-extrabold tracking-[-0.045em] sm:text-xl ${light ? 'text-white' : 'text-slate-800'}`}>
+          Campus<span className={`${light ? 'text-[#f2dac7]' : 'text-[#b85c38]'}`}>Notes</span>
         </div>
-        <div className={`text-[10px] font-bold uppercase tracking-[0.2em] ${light ? 'text-sky-200' : 'text-[#035492]'}`}>
-          Academic Library
+        <div className={`mt-0.5 text-[8px] font-bold uppercase tracking-[0.17em] ${light ? 'text-slate-300' : 'text-slate-500'}`}>
+          Learn. Practise. Progress.
         </div>
       </div>
     </Link>
   );
 }
 
-/** PTUT + ASTC logos, shown inside soft white chips so they stay readable on any background. */
+
 export function PartnerLogos({ size = 'md', showDivider = true }: { size?: 'sm' | 'md' | 'lg'; showDivider?: boolean }) {
   const h = size === 'lg' ? 'h-14' : size === 'sm' ? 'h-8' : 'h-10';
   return (
     <div className="flex items-center gap-2.5">
       {showDivider && <span className="hidden h-8 w-px bg-slate-200 sm:block" />}
       <span className="flex items-center rounded-xl bg-white p-1 shadow-sm ring-1 ring-slate-200" title="Punjab Tianjin University of Technology">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
+        {}
         <img src="/logos/ptut.png" alt="PTUT – Punjab Tianjin University of Technology" className={`${h} w-auto`} />
       </span>
       <span className="flex items-center rounded-xl bg-white p-1 shadow-sm ring-1 ring-slate-200" title="ASTC">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
+        {}
         <img src="/logos/astc.png" alt="ASTC logo" className={`${h} w-auto`} />
       </span>
     </div>

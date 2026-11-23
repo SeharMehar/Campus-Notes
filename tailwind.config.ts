@@ -10,9 +10,9 @@ const config: Config = {
     extend: {
       colors: {
         seagreen: {
-          DEFAULT: '#14b8a6', // Main Sea-Green
-          hover: '#0f766e',   // Darker Sea-Green for hover
-          light: '#ccfbf1',   // Light Sea-Green accent/bg
+          DEFAULT: '#14b8a6', 
+          hover: '#0f766e',   
+          light: '#ccfbf1',   
         }
       },
     },

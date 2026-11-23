@@ -1,7 +1,3 @@
-// lib/ai.ts
-// Server-side AI helper (Anthropic Claude by default, Gemini optional).
-// API keys stay on the server and are never exposed to the browser.
-
 export const SUMMARY_FALLBACK = 'Summary unavailable. Please refer to module text.';
 
 export interface ModuleSummary {
@@ -11,20 +7,159 @@ export interface ModuleSummary {
 
 export class AiConfigError extends Error {}
 
+export class AiCredentialError extends Error {}
+
+export class AiEmptyResponseError extends Error {
+  constructor(provider: string, reason = 'no text received') {
+    super(`${provider} returned no text (${reason})`);
+    this.name = 'AiEmptyResponseError';
+  }
+}
+
 interface AskOptions {
   system: string;
   prompt: string;
   model?: string;
   maxTokens?: number;
   timeoutMs?: number;
-  /** true (default): ask Gemini for JSON output. false: plain text / markdown. */
+  
   json?: boolean;
 }
 
-/** Models tried in order. Set AI_MODEL in .env to force one. A missing model (404) just moves to the next. */
+
 function anthropicModels(preferred?: string): string[] {
   return [preferred, process.env.AI_MODEL, 'claude-haiku-5-5', 'claude-haiku-4-5']
     .filter((m, i, a): m is string => !!m && a.indexOf(m) === i);
+}
+
+
+const GEMINI_FALLBACK_MODELS = ['gemini-3.5-flash-lite', 'gemini-3.6-flash', 'gemini-3.8-flash'];
+
+let geminiModelCache: { at: number; models: string[] } | null = null;
+
+
+async function discoverGeminiModels(key: string): Promise<string[]> {
+  if (geminiModelCache && Date.now() - geminiModelCache.at < 60 * 60 * 1000) return geminiModelCache.models;
+  try {
+    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200', {
+      headers: { 'x-goog-api-key': key },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      if (isInvalidGeminiCredential(body)) throw new AiCredentialError('Gemini API key was rejected');
+      console.error(`[AI] Could not list Gemini models (HTTP ${res.status}): ${body.slice(0, 300)}`);
+      return [];
+    }
+    const data = await res.json();
+    const found = ((data.models ?? []) as { name?: string; supportedGenerationMethods?: string[] }[])
+      .filter((m) => m.supportedGenerationMethods?.includes('generateContent'))
+      .map((m) => String(m.name ?? '').replace(/^models\//, ''))
+      .filter((n) => /^gemini-[\d.]+-flash/.test(n) && !/(image|tts|live|audio|embedding|robotics|computer|native|vision|thinking)/.test(n));
+
+    const score = (n: string) => {
+      const version = parseFloat(n.match(/^gemini-([\d.]+)/)?.[1] ?? '0');
+      const stable = /(preview|exp)/.test(n) ? 0 : 1;
+      const lite = /lite/.test(n) ? 1 : 0;
+      return stable * 10000 + lite * 1000 + version * 10; 
+    };
+    const models = found.sort((x, y) => score(y) - score(x)).slice(0, 4);
+    if (models.length) geminiModelCache = { at: Date.now(), models };
+    console.log('[AI] Gemini models available for this key:', models.join(', ') || '(none matched)');
+    return models;
+  } catch (err) {
+    if (err instanceof AiCredentialError) throw err;
+    console.error('[AI] Gemini model discovery failed:', err instanceof Error ? err.message : err);
+    return [];
+  }
+}
+
+async function geminiCandidates(key: string, preferred?: string): Promise<string[]> {
+  const discovered = await discoverGeminiModels(key);
+  const candidates = discovered.length
+    ? [preferred, process.env.AI_MODEL, ...discovered]
+    : [preferred, process.env.AI_MODEL, ...GEMINI_FALLBACK_MODELS];
+  return candidates
+    .filter((m, i, a): m is string => !!m && a.indexOf(m) === i)
+    .slice(0, 4);
+}
+
+
+async function geminiGenerate(opts: {
+  key: string;
+  system: string;
+  contents: { role: 'user' | 'model'; parts: { text: string }[] }[];
+  maxTokens: number;
+  json?: boolean;
+  preferredModel?: string;
+  timeoutMs?: number;
+}): Promise<string> {
+  const models = await geminiCandidates(opts.key, opts.preferredModel);
+  let lastStatus = 0;
+  let lastBody = '';
+  let lastFailure: 'network' | 'http' | null = null;
+  const requestTimeoutMs = Math.min(opts.timeoutMs ?? 12_000, 12_000);
+
+  for (const model of models) {
+    let transientRetryDone = false;
+    for (const withThinking of [true, false]) {
+      let res: Response;
+      try {
+        res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': opts.key },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: opts.system }] },
+            contents: opts.contents,
+            generationConfig: {
+              maxOutputTokens: opts.maxTokens,
+              ...(withThinking ? { thinkingConfig: { thinkingLevel: 'low' } } : {}),
+              ...(opts.json ? { responseMimeType: 'application/json' } : {}),
+            },
+          }),
+          signal: AbortSignal.timeout(requestTimeoutMs),
+        });
+      } catch (err) {
+        lastFailure = 'network';
+        console.warn(`[AI] Gemini request timed out or failed for ${model}; trying the next model:`, err instanceof Error ? err.message : err);
+        break;
+      }
+
+      if (res.ok) {
+        const data = await res.json();
+        const candidate = data.candidates?.[0];
+        const text = (candidate?.content?.parts ?? []).map((p: { text?: string }) => p.text ?? '').join('');
+        if (text.trim()) return text;
+        const reason = candidate?.finishReason ?? data.promptFeedback?.blockReason ?? 'no text parts';
+        console.error(`[AI] Gemini model ${model} returned no text (${reason})`);
+        throw new AiEmptyResponseError('Gemini', String(reason));
+      }
+
+      lastStatus = res.status;
+      lastFailure = 'http';
+      lastBody = await res.text().catch(() => '');
+      console.warn(`[AI] Gemini model "${model}" failed with HTTP ${res.status}: ${lastBody.slice(0, 400)}`);
+
+      if (isInvalidGeminiCredential(lastBody)) throw new AiCredentialError('Gemini API key was rejected');
+      
+      if (withThinking && res.status === 400 && /think/i.test(lastBody)) continue;
+      
+      
+      if (withThinking && !transientRetryDone && (res.status === 503 || res.status === 429)) {
+        transientRetryDone = true;
+        await new Promise((resolve) => setTimeout(resolve, 1200));
+        continue;
+      }
+      break; 
+    }
+  }
+  if (lastFailure === 'network') throw new Error('Gemini API request failed (network)');
+  throw new Error(`Gemini API request failed (${lastStatus || 404})`);
+}
+
+function isInvalidGeminiCredential(body: string): boolean {
+  const message = body.toLowerCase();
+  return message.includes('api key not valid') || message.includes('api_key_invalid') || message.includes('invalid api key');
 }
 
 function requireKeys() {
@@ -38,7 +173,50 @@ function requireKeys() {
   return { gemini, anthropic };
 }
 
-/** Sends a prompt and returns the full text reply. */
+function parseAnthropicTextDelta(line: string): string | null {
+  if (!line.startsWith('data:')) return null;
+  const payload = line.slice(5).trim();
+  if (!payload || payload === '[DONE]') return null;
+  try {
+    const event: { type?: string; delta?: { type?: string; text?: string } } = JSON.parse(payload);
+    return event.type === 'content_block_delta' && event.delta?.type === 'text_delta'
+      ? event.delta.text ?? null
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+async function* streamAnthropicText(body: ReadableStream<Uint8Array>): AsyncGenerator<string> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        buffer += decoder.decode();
+        break;
+      }
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split(/\r?\n/);
+      buffer = lines.pop() ?? '';
+      for (const line of lines) {
+        const text = parseAnthropicTextDelta(line);
+        if (text) yield text;
+      }
+    }
+
+    if (buffer) {
+      const text = parseAnthropicTextDelta(buffer);
+      if (text) yield text;
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+
 export async function askClaude(opts: AskOptions): Promise<string> {
   const { gemini, anthropic } = requireKeys();
   const controller = new AbortController();
@@ -46,36 +224,15 @@ export async function askClaude(opts: AskOptions): Promise<string> {
 
   try {
     if (gemini) {
-      const model = opts.model || process.env.AI_MODEL || 'gemini-2.5-flash';
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': gemini },
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: opts.system }] },
-            contents: [{ role: 'user', parts: [{ text: opts.prompt }] }],
-            generationConfig: {
-              maxOutputTokens: opts.maxTokens ?? 1000,
-              // Gemini 2.5 "thinking" tokens count against maxOutputTokens and silently truncate the answer.
-              thinkingConfig: { thinkingBudget: 0 },
-              ...(opts.json === false ? {} : { responseMimeType: 'application/json' }),
-            },
-          }),
-          signal: controller.signal,
-        }
-      );
-      if (!res.ok) {
-        const body = await res.text().catch(() => '');
-        console.error('Gemini API error:', res.status, body.slice(0, 500));
-        throw new Error(`Gemini API request failed (${res.status})`);
-      }
-      const data = await res.json();
-      const text = (data.candidates?.[0]?.content?.parts ?? [])
-        .map((part: { text?: string }) => part.text ?? '')
-        .join('');
-      if (!text.trim()) throw new Error('Empty Gemini AI response');
-      return text;
+      return await geminiGenerate({
+        key: gemini,
+        system: opts.system,
+        contents: [{ role: 'user', parts: [{ text: opts.prompt }] }],
+        maxTokens: opts.maxTokens ?? 1000,
+        json: opts.json !== false,
+        preferredModel: opts.model,
+        timeoutMs: opts.timeoutMs,
+      });
     }
 
     let lastError: Error = new Error('No model available');
@@ -113,7 +270,7 @@ export async function askClaude(opts: AskOptions): Promise<string> {
   }
 }
 
-/** Extracts JSON from an AI response. */
+
 export function extractJson(text: string): unknown {
   const cleaned = text.replace(/```(?:json)?/gi, '').trim();
   const starts = [cleaned.indexOf('{'), cleaned.indexOf('[')].filter((i) => i >= 0);
@@ -123,10 +280,6 @@ export function extractJson(text: string): unknown {
   if (end <= start) throw new Error('Incomplete JSON in AI reply');
   return JSON.parse(cleaned.slice(start, end + 1));
 }
-
-/* ------------------------------------------------------------------ */
-/*  AI SUMMARY  (ChatGPT / Gemini style: streamed, well-formatted markdown) */
-/* ------------------------------------------------------------------ */
 
 export const SUMMARY_VERSION = 'v2';
 const MAX_NOTES_CHARS = 40000;
@@ -159,7 +312,6 @@ Rules:
 - Cover the whole module, not just the beginning.
 - Total length about 350-500 words. No introduction before "## Overview" and no closing remarks after the Q&A.`;
 
-/** Pulls the numbered takeaways out of the markdown (used for the cache + fallbacks). */
 export function extractTakeaways(markdown: string): string[] {
   const m = markdown.match(/##\s*Key Takeaways\s*\n([\s\S]*?)(?:\n##\s|$)/i);
   if (!m) return [];
@@ -169,12 +321,10 @@ export function extractTakeaways(markdown: string): string[] {
     .filter((x): x is string => !!x);
 }
 
-/** A summary is "complete" only if the model reached the takeaways + Q&A (so a cut-off reply is never cached). */
 export function isCompleteSummary(markdown: string): boolean {
   return extractTakeaways(markdown).length >= 4 && /Quick Revision Q&A/i.test(markdown) && /\*\*Q3\./.test(markdown);
 }
 
-/** Markdown version of the offline fallback summary. */
 export function fallbackToMarkdown(s: ModuleSummary): string {
   const takeaways = s.keyTakeaways.map((t, i) => `${i + 1}. ${t}`).join('\n');
   const [body, qa] = s.summary.split(/\n\n### Practice Questions and Answers/);
@@ -241,17 +391,14 @@ export function createFallbackSummary(input: {
 function buildSummaryPrompt(input: { courseTitle?: string; moduleTitle: string; content: string }): string {
   let notes = input.content;
   if (notes.length > MAX_NOTES_CHARS) {
-    // keep the beginning AND the end so the whole module is represented
+    
     const half = Math.floor(MAX_NOTES_CHARS / 2);
     notes = `${notes.slice(0, half)}\n\n[...middle of the module shortened...]\n\n${notes.slice(-half)}`;
   }
   return `Course: ${input.courseTitle || 'University course'}\n\nModule: ${input.moduleTitle}\n\n<notes>\n${notes}\n</notes>`;
 }
 
-/**
- * Streams the summary as text chunks (like ChatGPT typing).
- * Gemini (if configured) returns one chunk; Anthropic streams token by token.
- */
+
 export async function* streamSummary(input: {
   courseTitle?: string;
   moduleTitle: string;
@@ -282,63 +429,39 @@ export async function* streamSummary(input: {
     });
     if (res.ok) break;
     lastStatus = res.status;
-    const body = await res.text().catch(() => '');
-    console.warn(`Anthropic model "${model}" failed (${res.status}):`, body.slice(0, 300));
-    if (res.status !== 404 && res.status !== 400) break;
+    console.warn(`Anthropic summary request failed (${res.status}) for model "${model}"`);
+    if (res.status !== 404 && res.status !== 400) {
+      throw new Error(`Anthropic API request failed (${res.status})`);
+    }
     res = null;
   }
-  if (!res || !res.body) throw new Error(`Anthropic API request failed (${lastStatus})`);
+  if (!res || !res.body) throw new Error(`Anthropic API request failed (${lastStatus || 502})`);
 
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() ?? '';
-    for (const line of lines) {
-      if (!line.startsWith('data:')) continue;
-      const payload = line.slice(5).trim();
-      if (!payload || payload === '[DONE]') continue;
-      try {
-        const evt = JSON.parse(payload);
-        if (evt.type === 'content_block_delta' && evt.delta?.type === 'text_delta' && evt.delta.text) {
-          yield evt.delta.text as string;
-        }
-      } catch {
-        /* ignore partial/keep-alive lines */
-      }
-    }
+  let receivedText = false;
+  for await (const chunk of streamAnthropicText(res.body)) {
+    if (chunk.trim()) receivedText = true;
+    yield chunk;
   }
+  if (!receivedText) throw new AiEmptyResponseError('Anthropic summary stream');
 }
 
-/* ------------------------------------------------------------------ */
-/*  AI TUTOR CHAT  (multi-turn, streamed)                              */
-/* ------------------------------------------------------------------ */
+
+
+
 
 export interface ChatTurn { role: 'user' | 'assistant'; content: string }
 
-/** Streams an answer to a conversation. Gemini (if configured) answers in one piece. */
+
 export async function* streamChat(opts: { system: string; messages: ChatTurn[]; maxTokens?: number }): AsyncGenerator<string> {
   const { gemini, anthropic } = requireKeys();
 
   if (gemini) {
-    const model = process.env.AI_MODEL || 'gemini-2.5-flash';
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': gemini },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: opts.system }] },
-        contents: opts.messages.map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
-        generationConfig: { maxOutputTokens: opts.maxTokens ?? 900, thinkingConfig: { thinkingBudget: 0 } },
-      }),
-      signal: AbortSignal.timeout(45000),
+    yield await geminiGenerate({
+      key: gemini,
+      system: opts.system,
+      contents: opts.messages.map((m) => ({ role: m.role === 'assistant' ? ('model' as const) : ('user' as const), parts: [{ text: m.content }] })),
+      maxTokens: opts.maxTokens ?? 900,
     });
-    if (!res.ok) throw new Error(`Gemini API request failed (${res.status})`);
-    const data = await res.json();
-    yield (data.candidates?.[0]?.content?.parts ?? []).map((p: { text?: string }) => p.text ?? '').join('');
     return;
   }
 
@@ -353,28 +476,18 @@ export async function* streamChat(opts: { system: string; messages: ChatTurn[]; 
     });
     if (res.ok) break;
     lastStatus = res.status;
-    if (res.status !== 404 && res.status !== 400) break;
+    console.warn(`Anthropic tutor request failed (${res.status}) for model "${model}"`);
+    if (res.status !== 404 && res.status !== 400) {
+      throw new Error(`Anthropic API request failed (${res.status})`);
+    }
     res = null;
   }
-  if (!res || !res.body) throw new Error(`Anthropic API request failed (${lastStatus})`);
+  if (!res || !res.body) throw new Error(`Anthropic API request failed (${lastStatus || 502})`);
 
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() ?? '';
-    for (const line of lines) {
-      if (!line.startsWith('data:')) continue;
-      const payload = line.slice(5).trim();
-      if (!payload) continue;
-      try {
-        const evt = JSON.parse(payload);
-        if (evt.type === 'content_block_delta' && evt.delta?.type === 'text_delta' && evt.delta.text) yield evt.delta.text as string;
-      } catch { /* ignore keep-alive lines */ }
-    }
+  let receivedText = false;
+  for await (const chunk of streamAnthropicText(res.body)) {
+    if (chunk.trim()) receivedText = true;
+    yield chunk;
   }
+  if (!receivedText) throw new AiEmptyResponseError('Anthropic tutor stream');
 }

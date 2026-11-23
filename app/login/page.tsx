@@ -14,7 +14,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-  const [successMsg, setSuccessMsg] = useState(''); 
+  const [successMsg, setSuccessMsg] = useState('');
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -25,12 +25,13 @@ export default function LoginPage() {
   const handleEmailSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+
     
-    // clear old messages first
     setErrorMsg('');
-    setSuccessMsg(''); 
+    setSuccessMsg('');
 
     const cleanEmail = email.trim().toLowerCase();
+    let apiMessage = ''; 
 
     try {
       const res = await fetch('/api/auth/login', {
@@ -39,37 +40,40 @@ export default function LoginPage() {
         body: JSON.stringify({ email: cleanEmail, password }),
       });
 
-      const result = await res.json();
+      const result = await res.json().catch(() => ({}));
 
       if (res.ok && result.success) {
         localStorage.setItem('user', JSON.stringify(result.user));
-        
+
         setErrorMsg('');
         setSuccessMsg('Login Successful! Redirecting...');
-        
+
         setTimeout(() => {
           if (result.user.role === 'ADMIN' || cleanEmail === 'admin@ptut.com') {
             router.push('/admin');
           } else {
             router.push('/');
           }
-        }, 2000);
+        }, 600);
         return;
       }
+
+      console.warn('Login API answered:', res.status, result.error);
+      if (res.status >= 500) apiMessage = result.error || 'Server error. Check the terminal for details.';
     } catch (apiErr) {
-      console.log('API auth skipped, falling back to Supabase Auth...');
+      console.error('Login API could not be reached:', apiErr);
+      apiMessage = 'Could not reach the server. Is npm run dev running?';
     }
 
-    // 3. Third Priority: Standard Supabase Native Auth
+    
     const { data, error } = await supabase.auth.signInWithPassword({
       email: cleanEmail,
       password,
     });
 
     if (error) {
-      console.error('Supabase Auth Error:', error.message);
-      setSuccessMsg(''); 
-      setErrorMsg('Invalid login credentials');
+      setSuccessMsg('');
+      setErrorMsg(apiMessage || 'Invalid login credentials');
       setLoading(false);
       return;
     }
@@ -84,14 +88,14 @@ export default function LoginPage() {
 
       setErrorMsg('');
       setSuccessMsg('Login Successful! Redirecting...');
-      
+
       setTimeout(() => {
         if (profile?.role === 'ADMIN' || cleanEmail === 'admin@ptut.com') {
           router.push('/admin');
         } else {
           router.push('/');
         }
-      }, 2000);
+      }, 600);
     }
   };
 
@@ -116,28 +120,28 @@ export default function LoginPage() {
 
   return (
     <div className="grid min-h-screen font-sans lg:grid-cols-2">
-      {/* Left: brand panel */}
+      {}
       <div className="hero-bg relative hidden overflow-hidden p-12 text-white lg:flex lg:flex-col lg:justify-between">
         <div className="dot-grid absolute inset-0 opacity-50" />
         <div className="relative"><Brand light /></div>
         <div className="relative max-w-md">
-          <span className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-[0.16em] text-teal-100">
+          <span className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-[0.16em] text-orange-100">
             <Sparkles className="h-3.5 w-3.5 text-yellow-300" /> Welcome back
           </span>
           <h2 className="text-4xl font-black leading-tight">Manage courses, notes and quizzes in one place.</h2>
-          <p className="mt-4 text-sm leading-7 text-teal-50/90">Sign in to upload modules, edit notes and keep the CampusNotes library up to date for every student.</p>
+          <p className="mt-4 text-sm leading-7 text-orange-50/90">Sign in to upload modules, edit notes and keep the CampusNotes library up to date for every student.</p>
         </div>
         <div className="relative">
-          <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-teal-100">An initiative by</p>
+          <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-orange-100">An initiative by</p>
           <PartnerLogos size="lg" showDivider={false} />
         </div>
       </div>
 
-      {/* Right: form */}
+      {}
       <div className="flex flex-col bg-slate-50">
         <div className="flex items-center justify-between px-6 py-5 lg:justify-end">
           <div className="lg:hidden"><Brand /></div>
-          <button onClick={() => router.push('/')} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-600 transition hover:bg-teal-50">
+          <button onClick={() => router.push('/')} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-600 transition hover:bg-orange-50">
             <ArrowLeft className="h-4 w-4" /> Back to Home
           </button>
         </div>
@@ -145,7 +149,7 @@ export default function LoginPage() {
         <div className="flex flex-1 items-center justify-center p-6">
           <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 shadow-xl shadow-slate-200/60">
             <div className="mb-6 text-center">
-              <span className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-50 text-teal-600"><ShieldCheck className="h-6 w-6" /></span>
+              <span className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-50 text-orange-600"><ShieldCheck className="h-6 w-6" /></span>
               <h1 className="text-2xl font-black text-slate-900">Sign In</h1>
               <p className="mt-1 text-xs text-slate-500">Access Admin Portal or Student Profile</p>
             </div>
@@ -157,18 +161,18 @@ export default function LoginPage() {
               <div>
                 <label className="mb-1 block text-xs font-bold text-slate-700">Email / Username</label>
                 <div className="relative">
-                  <Mail className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-teal-600" />
-                  <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Enter your email" required className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-3 text-sm text-slate-800 outline-none transition focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-100" />
+                  <Mail className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-orange-600" />
+                  <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Enter your email" required className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-3 text-sm text-slate-800 outline-none transition focus:border-orange-500 focus:bg-white focus:ring-4 focus:ring-orange-100" />
                 </div>
               </div>
               <div>
                 <label className="mb-1 block text-xs font-bold text-slate-700">Password</label>
                 <div className="relative">
-                  <Lock className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-teal-600" />
-                  <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-3 text-sm text-slate-800 outline-none transition focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-100" />
+                  <Lock className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-orange-600" />
+                  <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-3 text-sm text-slate-800 outline-none transition focus:border-orange-500 focus:bg-white focus:ring-4 focus:ring-orange-100" />
                 </div>
               </div>
-              <button type="submit" disabled={loading} className="w-full rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 py-3 text-sm font-bold text-white shadow-lg shadow-teal-200 transition hover:opacity-90 disabled:opacity-50">
+              <button type="submit" disabled={loading} className="w-full rounded-xl bg-gradient-to-r from-orange-600 to-orange-600 py-3 text-sm font-bold text-white shadow-lg shadow-orange-200 transition hover:opacity-90 disabled:opacity-50">
                 {loading ? 'Authenticating...' : 'Sign In'}
               </button>
             </form>

@@ -4,11 +4,47 @@ import { AiConfigError, askClaude, extractJson } from '@/lib/ai';
 
 export const maxDuration = 60;
 
+const AI_WINDOW_MS = 60_000;
+const MAX_AI_GENERATIONS = 8;
+const aiGenerations = new Map<string, number[]>();
+
 interface QuizQuestion {
   question: string;
   options: string[];
   correct_option: number;
   explanation: string;
+}
+
+function canGenerateAiQuiz(ip: string): boolean {
+  const now = Date.now();
+  const recent = (aiGenerations.get(ip) ?? []).filter((timestamp) => now - timestamp < AI_WINDOW_MS);
+  if (recent.length >= MAX_AI_GENERATIONS) {
+    aiGenerations.set(ip, recent);
+    return false;
+  }
+  recent.push(now);
+  aiGenerations.set(ip, recent);
+  return true;
+}
+
+function shuffle<T>(items: readonly T[]): T[] {
+  const result = [...items];
+  for (let index = result.length - 1; index > 0; index--) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [result[index], result[swapIndex]] = [result[swapIndex], result[index]];
+  }
+  return result;
+}
+
+function prepareQuiz(questions: QuizQuestion[]): QuizQuestion[] {
+  return shuffle(questions).slice(0, 8).map((question) => {
+    const options = shuffle(question.options.map((text, index) => ({ text, index })));
+    return {
+      ...question,
+      options: options.map((option) => option.text),
+      correct_option: options.findIndex((option) => option.index === question.correct_option),
+    };
+  });
 }
 
 function fallbackQuiz(moduleTitle: string, content: string): QuizQuestion[] {
@@ -42,6 +78,35 @@ export async function POST(request: Request) {
 
     if (error || !module) return NextResponse.json({ error: 'Module not found.' }, { status: 404 });
 
+    const notes = typeof module.content === 'string' ? module.content.slice(0, 12000) : '';
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+    if (notes.trim().length >= 50 && canGenerateAiQuiz(ip)) {
+      try {
+        const variation = Math.random().toString(36).slice(2, 9);
+        const raw = await askClaude({
+          system: `Create a fresh university-level practice quiz from the supplied module notes.
+Reply with ONLY valid JSON: {"questions":[{"question":"...","options":["...","...","...","..."],"correct_option":0,"explanation":"..."}]}
+Create exactly 8 questions. Use only facts in the notes. Mix conceptual, comparison, and application questions; use a different scenario and phrasing on each attempt. Keep all four options plausible, concise, and distinct. correct_option is a zero-based index.`,
+          prompt: `Attempt variation: ${variation}\nModule: ${module.title}\n\n<notes>${notes}</notes>`,
+          maxTokens: 2200,
+          timeoutMs: 25000,
+        });
+        const parsed = extractJson(raw) as { questions?: QuizQuestion[] };
+        const questions = Array.isArray(parsed.questions) ? parsed.questions.filter((question) =>
+          question && typeof question.question === 'string' && question.question.trim() &&
+          Array.isArray(question.options) && question.options.length === 4 &&
+          question.options.every((option) => typeof option === 'string') &&
+          Number.isInteger(question.correct_option) && question.correct_option >= 0 && question.correct_option < 4 &&
+          typeof question.explanation === 'string'
+        ) : [];
+        if (questions.length >= 4) {
+          return NextResponse.json({ questions: prepareQuiz(questions), source: 'ai' });
+        }
+      } catch (generationError) {
+        if (!(generationError instanceof AiConfigError)) console.error('Quiz generation failed:', generationError);
+      }
+    }
+
     const { data: quiz } = await supabaseAdmin
       .from('quizzes')
       .select('id')
@@ -57,44 +122,25 @@ export async function POST(request: Request) {
 
       const validStoredMcqs = (storedMcqs || []).filter((question) =>
         typeof question.question === 'string' &&
+        question.question.trim().length > 0 &&
         Array.isArray(question.options) &&
         question.options.length === 4 &&
+        question.options.every((option: unknown) => typeof option === 'string') &&
         Number.isInteger(question.correct_option) &&
         question.correct_option >= 0 &&
-        question.correct_option < 4
+        question.correct_option < 4 &&
+        typeof question.explanation === 'string'
       );
 
       if (validStoredMcqs.length > 0) {
         return NextResponse.json({
-          questions: validStoredMcqs,
+          questions: prepareQuiz(validStoredMcqs),
           source: 'mcq-bank',
         });
       }
     }
 
-    const notes = typeof module.content === 'string' ? module.content.slice(0, 12000) : '';
-    if (notes.trim().length >= 50) {
-      try {
-        const raw = await askClaude({
-          system: `Create a university-level practice quiz from the supplied module notes.
-Reply with ONLY valid JSON: {"questions":[{"question":"...","options":["...","...","...","..."],"correct_option":0,"explanation":"..."}]}
-Create exactly 8 questions. Use only information in the notes. Keep options concise, factual, and distinct. correct_option is a zero-based index.`,
-          prompt: `Module: ${module.title}\n\n<notes>${notes}</notes>`,
-          maxTokens: 2200,
-          timeoutMs: 25000,
-        });
-        const parsed = extractJson(raw) as { questions?: QuizQuestion[] };
-        const questions = Array.isArray(parsed.questions) ? parsed.questions.filter((question) =>
-          question.question && Array.isArray(question.options) && question.options.length === 4 &&
-          Number.isInteger(question.correct_option) && question.correct_option >= 0 && question.correct_option < 4
-        ).slice(0, 8) : [];
-        if (questions.length >= 4) return NextResponse.json({ questions, source: 'ai' });
-      } catch (error) {
-        if (!(error instanceof AiConfigError)) console.error('Quiz generation failed:', error);
-      }
-    }
-
-    return NextResponse.json({ questions: fallbackQuiz(module.title, notes), source: 'fallback' });
+    return NextResponse.json({ questions: prepareQuiz(fallbackQuiz(module.title, notes)), source: 'fallback' });
   } catch {
     return NextResponse.json({ error: 'Unable to generate quiz.' }, { status: 500 });
   }

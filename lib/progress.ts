@@ -1,7 +1,3 @@
-// lib/progress.ts  (browser only)
-// Everything a student does is remembered in localStorage: study days, quiz history, bookmarks, last position.
-// From that we compute a streak, XP / level and achievement badges. No login is needed.
-
 export interface QuizRecord { moduleId: string; title: string; score: number; at: string }
 export interface Bookmark { moduleId: string; courseId: string; title: string; courseTitle?: string }
 export interface LastVisit { courseId: string; moduleId: string; title: string; courseTitle?: string }
@@ -20,22 +16,22 @@ const write = (key: string, value: unknown) => {
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-/* ---------- study days & streak ---------- */
+
 export function markStudyDay() {
   const days = read<string[]>('cn_days', []);
   if (!days.includes(today())) write('cn_days', [...days, today()].slice(-400));
 }
 export function getStudyDays(): string[] { return read<string[]>('cn_days', []); }
 
-export function getStreak(days = getStudyDays()): { current: number; best: number } {
+export function getStreak(days = getStudyDays(), referenceTime = Date.now()): { current: number; best: number } {
   const set = new Set(days);
   const fmt = (d: Date) => d.toISOString().slice(0, 10);
-  // current streak: today or yesterday counts as "alive"
-  let cursor = new Date();
-  if (!set.has(fmt(cursor))) cursor = new Date(Date.now() - 86400000);
+  
+  let cursor = new Date(referenceTime);
+  if (!set.has(fmt(cursor))) cursor = new Date(referenceTime - 86400000);
   let current = 0;
   while (set.has(fmt(cursor))) { current++; cursor = new Date(cursor.getTime() - 86400000); }
-  // best streak
+  
   const sorted = [...set].sort();
   let best = 0, run = 0, prev: number | null = null;
   for (const d of sorted) {
@@ -47,13 +43,13 @@ export function getStreak(days = getStudyDays()): { current: number; best: numbe
   return { current, best };
 }
 
-/* ---------- quiz history ---------- */
+
 export function addQuizRecord(r: QuizRecord) {
   write('cn_quiz_history', [...read<QuizRecord[]>('cn_quiz_history', []), r].slice(-200));
 }
 export function getQuizHistory(): QuizRecord[] { return read<QuizRecord[]>('cn_quiz_history', []); }
 
-/* ---------- bookmarks ---------- */
+
 export function getBookmarks(): Bookmark[] { return read<Bookmark[]>('cn_bookmarks', []); }
 export function isBookmarked(moduleId: string) { return getBookmarks().some((b) => b.moduleId === moduleId); }
 export function toggleBookmark(b: Bookmark): boolean {
@@ -63,11 +59,11 @@ export function toggleBookmark(b: Bookmark): boolean {
   return !exists;
 }
 
-/* ---------- resume where you left off ---------- */
+
 export function setLastVisit(v: LastVisit) { write('cn_last', v); }
 export function getLastVisit(): LastVisit | null { return read<LastVisit | null>('cn_last', null); }
 
-/* ---------- small counters (AI summary / tutor usage) ---------- */
+
 export function bump(counter: 'summaries' | 'tutor') {
   const c = read<Record<string, number>>('cn_counters', {});
   c[counter] = (c[counter] || 0) + 1;
@@ -75,14 +71,14 @@ export function bump(counter: 'summaries' | 'tutor') {
 }
 export function getCounters() { return read<Record<string, number>>('cn_counters', {}); }
 
-/* ---------- completed modules (same keys the course page already uses) ---------- */
+
 export function getCompletedByCourse(courseIds: string[]): Record<string, string[]> {
   const out: Record<string, string[]> = {};
   for (const id of courseIds) out[id] = read<string[]>(`progress_${id}`, []);
   return out;
 }
 
-/* ---------- XP, level, badges ---------- */
+
 export interface Stats {
   modulesDone: number;
   quizzes: number;

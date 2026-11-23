@@ -12,7 +12,7 @@ const ALLOWED = new Set([
 
 const str = (v: unknown, max = 80) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null);
 
-/** Stores one anonymous usage event. Always answers 202 so tracking can never break the student UI. */
+
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));

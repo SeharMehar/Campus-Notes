@@ -1,7 +1,3 @@
-// lib/track.ts  (browser only)
-// Sends anonymous usage events to /api/track. No names, emails or personal data are collected;
-// a random visitor id is stored in localStorage so we can count unique learners.
-
 export type TrackEvent =
   | 'page_view'
   | 'module_view'
@@ -39,6 +35,6 @@ export function track(
     });
     fetch('/api/track', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, keepalive: true }).catch(() => {});
   } catch {
-    /* analytics must never break the app */
+    
   }
 }

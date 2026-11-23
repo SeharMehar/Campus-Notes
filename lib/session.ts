@@ -1,9 +1,7 @@
-// lib/session.ts
-// Tiny signed-cookie session for the admin area (HMAC-SHA256, no extra packages).
 import { createHmac, timingSafeEqual } from 'crypto';
 
 export const SESSION_COOKIE = 'cn_session';
-const MAX_AGE_SECONDS = 60 * 60 * 8; // 8 hours
+const MAX_AGE_SECONDS = 60 * 60 * 8; 
 
 export interface SessionUser {
   email: string;
@@ -43,7 +41,7 @@ export function verifySessionToken(token: string | undefined | null): SessionUse
   }
 }
 
-/** Reads the session from a Request's Cookie header. */
+
 export function getSessionFromRequest(request: Request): SessionUser | null {
   const header = request.headers.get('cookie') || '';
   const match = header.split(';').map((c) => c.trim()).find((c) => c.startsWith(`${SESSION_COOKIE}=`));

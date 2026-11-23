@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { getSessionFromRequest } from '@/lib/session';
+
+function isAdmin(request: Request): boolean {
+  return getSessionFromRequest(request)?.role === 'ADMIN';
+}
 
 export async function GET(request: NextRequest) {
+  if (!isAdmin(request)) return NextResponse.json({ error: 'Admin login required.' }, { status: 401 });
   const moduleId = request.nextUrl.searchParams.get('moduleId')?.trim();
   if (!moduleId) return NextResponse.json({ error: 'moduleId is required.' }, { status: 400 });
   const { data: quiz, error: quizError } = await supabaseAdmin.from('quizzes').select('id').eq('module_id', moduleId).maybeSingle();
@@ -14,6 +20,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  if (!isAdmin(request)) return NextResponse.json({ error: 'Admin login required.' }, { status: 401 });
   try {
     const body = await request.json();
     const moduleId = String(body.moduleId || '').trim();
@@ -52,6 +59,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  if (!isAdmin(request)) return NextResponse.json({ error: 'Admin login required.' }, { status: 401 });
   const mcqId = request.nextUrl.searchParams.get('id')?.trim();
   if (!mcqId) return NextResponse.json({ error: 'MCQ id is required.' }, { status: 400 });
   const { error } = await supabaseAdmin.from('mcqs').delete().eq('id', mcqId);

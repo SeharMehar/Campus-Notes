@@ -24,7 +24,7 @@ export async function GET(request: Request) {
   const since = new Date(Date.now() - days * 86400000);
   since.setUTCHours(0, 0, 0, 0);
 
-  // Library size (always available)
+  
   const [coursesRes, modulesRes, mcqsRes] = await Promise.all([
     supabaseAdmin.from('courses').select('id, title, code'),
     supabaseAdmin.from('modules').select('id, title, course_id'),
@@ -43,7 +43,7 @@ export async function GET(request: Request) {
     .limit(30000);
 
   if (error) {
-    // 42P01 = table does not exist yet
+    
     const setupNeeded = error.code === '42P01' || /does not exist|schema cache/i.test(error.message);
     return NextResponse.json({ setupNeeded, library, error: setupNeeded ? null : error.message }, { status: setupNeeded ? 200 : 500 });
   }
@@ -56,7 +56,7 @@ export async function GET(request: Request) {
   const count = (name: string) => events.filter((e) => e.event === name).length;
   const visitors = new Set(events.map((e) => e.visitor_id));
 
-  // visitors that came back on 2+ different days
+  
   const daysByVisitor = new Map<string, Set<string>>();
   for (const e of events) {
     const set = daysByVisitor.get(e.visitor_id) ?? new Set<string>();
@@ -65,7 +65,7 @@ export async function GET(request: Request) {
   }
   const returning = [...daysByVisitor.values()].filter((s) => s.size >= 2).length;
 
-  // daily series (fills days with zero)
+  
   const daily: { date: string; visitors: number; views: number; quizzes: number; summaries: number }[] = [];
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date(Date.now() - i * 86400000);
@@ -80,7 +80,7 @@ export async function GET(request: Request) {
     });
   }
 
-  // module level stats
+  
   const perModule = new Map<string, { views: number; quizzes: number; scoreSum: number; completions: number; summaries: number }>();
   const touch = (id: string) => {
     const cur = perModule.get(id) ?? { views: 0, quizzes: 0, scoreSum: 0, completions: 0, summaries: 0 };
@@ -106,7 +106,7 @@ export async function GET(request: Request) {
   const topModules = [...moduleRows].sort((a, b) => b.views - a.views).slice(0, 8);
   const weakestModules = moduleRows.filter((m) => m.avgScore !== null && m.quizzes >= 1).sort((a, b) => (a.avgScore! - b.avgScore!)).slice(0, 5);
 
-  // course level
+  
   const perCourse = new Map<string, number>();
   for (const e of events) {
     if (e.event !== 'module_view') continue;
@@ -118,7 +118,7 @@ export async function GET(request: Request) {
     .sort((a, b) => b.views - a.views)
     .slice(0, 6);
 
-  // quiz score distribution
+  
   const scores = events.filter((e) => e.event === 'quiz_completed' && e.value !== null).map((e) => e.value as number);
   const buckets = [
     { label: '0–39%', count: scores.filter((s) => s < 40).length },

@@ -1,9 +1,9 @@
 'use client';
-// Small dependency-free SVG charts used by the analytics dashboards.
+
 
 export function AreaChart({
   data,
-  color = '#04AA6D',
+  color = '#b85c38',
   height = 220,
 }: {
   data: { label: string; value: number }[];
@@ -58,7 +58,7 @@ export function AreaChart({
 
 export function BarList({
   rows,
-  color = '#04AA6D',
+  color = '#b85c38',
   empty = 'No data yet',
 }: {
   rows: { label: string; sub?: string; value: number; suffix?: string }[];
@@ -98,7 +98,12 @@ export function Donut({
   return (
     <div className="flex flex-col items-center gap-5 sm:flex-row">
       <div className="relative h-40 w-40 shrink-0">
-        <svg viewBox="0 0 140 140" className="h-40 w-40 -rotate-90">
+        <svg
+          viewBox="0 0 140 140"
+          className="h-40 w-40 -rotate-90"
+          role="img"
+          aria-label={`${centerValue} ${centerLabel}. ${slices.map((slice) => `${slice.label}: ${slice.value}`).join(', ')}`}
+        >
           <circle cx="70" cy="70" r={r} fill="none" stroke="currentColor" strokeOpacity="0.1" strokeWidth="18" />
           {total > 0 &&
             slices.map((s) => {
